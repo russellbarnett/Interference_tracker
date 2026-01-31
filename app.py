@@ -1,763 +1,642 @@
+"""
+ELBOW ZONE™ | Behavioral Audit Terminal
+State-Machine Architecture
+
+© 2026 Russell Barnett. The Elbow Interference Theory™. All Rights Reserved.
+"""
+
 import streamlit as st
+from dataclasses import dataclass
+from typing import Optional
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ELBOW ZONE™ | BEHAVIORAL AUDIT TERMINAL
-# © 2026 Russell Barnett. The Elbow Interference Theory™. All Rights Reserved.
+# CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="ELBOW ZONE™ | Behavioral Audit Terminal",
+    page_title="ELBOW ZONE™",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GALLERY WHITE INSTITUTIONAL THEME
+# DOMAIN MODELS
 # ═══════════════════════════════════════════════════════════════════════════════
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-    
-    /* Gallery White Base */
-    .main {
-        background: #FFFFFF;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .stApp {
-        background: #FFFFFF;
-    }
-    
-    /* Subtle Grid Pattern */
-    .main::before {
-        content: '';
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background-image: 
-            linear-gradient(rgba(226, 232, 240, 0.4) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(226, 232, 240, 0.4) 1px, transparent 1px);
-        background-size: 48px 48px;
-        pointer-events: none;
-        z-index: -1;
-    }
-    
-    /* Sidebar - Clean White */
-    section[data-testid="stSidebar"] {
-        background: #FAFAFA;
-        border-right: 1px solid #E5E7EB;
-    }
-    
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
-        color: #111827 !important;
-    }
-    
-    /* Typography - Large & Bold */
-    h1 {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 900 !important;
-        font-size: 2.8rem !important;
-        color: #0F172A !important;
-        letter-spacing: -0.04em;
-        line-height: 1.1;
-    }
-    
-    h2 {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 800 !important;
-        font-size: 1.8rem !important;
-        color: #1E293B !important;
-        letter-spacing: -0.02em;
-    }
-    
-    h3 {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 700 !important;
-        font-size: 1.4rem !important;
-        color: #334155 !important;
-    }
-    
-    /* Slider Labels - Bold 20px */
-    .stSlider label {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 20px !important;
-        font-weight: 700 !important;
-        color: #1E293B !important;
-    }
-    
-    .stSlider p {
-        font-size: 14px !important;
-        color: #64748B !important;
-    }
-    
-    /* Equation Banner */
-    .equation-banner {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-        color: #F8FAFC;
-        padding: 32px 40px;
-        border-radius: 16px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.6rem;
-        text-align: center;
-        margin: 24px 0 32px 0;
-        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2);
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    
-    .equation-banner .equation {
-        font-size: 2rem;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        margin: 16px 0;
-    }
-    
-    .equation-banner .subtitle {
-        font-size: 1rem;
-        opacity: 0.7;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Column Headers */
-    .column-header {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.1rem;
-        font-weight: 800;
-        color: #0F172A;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        padding: 20px 24px;
-        background: #F8FAFC;
-        border: 2px solid #E2E8F0;
-        border-radius: 12px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    
-    .column-header.baseline {
-        border-color: #CBD5E1;
-        background: #F1F5F9;
-    }
-    
-    .column-header.subject {
-        border-color: #10B981;
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.04) 100%);
-    }
-    
-    /* Score Display - 1.5x Scale */
-    .score-box {
-        padding: 28px 36px;
-        border-radius: 16px;
-        text-align: center;
-        margin-top: 24px;
-    }
-    
-    .score-value {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 3.6rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-    }
-    
-    .score-label {
-        font-family: 'Inter', sans-serif;
-        font-size: 1rem;
-        font-weight: 600;
-        margin-top: 8px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-    
-    /* Elbow Zone - Emerald */
-    .elbow-zone {
-        background: linear-gradient(135deg, #059669 0%, #10B981 100%);
-        color: white;
-        box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
-    }
-    
-    /* Head Zone - Soft Coral */
-    .head-zone {
-        background: linear-gradient(135deg, #DC2626 0%, #F87171 100%);
-        color: white;
-        box-shadow: 0 8px 32px rgba(248, 113, 113, 0.3);
-    }
-    
-    /* Locked State */
-    .locked-score {
-        background: linear-gradient(135deg, #475569 0%, #64748B 100%);
-        color: white;
-        box-shadow: 0 8px 32px rgba(71, 85, 105, 0.25);
-    }
-    
-    .locked-score .score-value {
-        font-size: 1.4rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-    }
-    
-    /* Ghost Value Label */
-    .ghost-value {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 13px;
-        color: #94A3B8;
-        background: #F1F5F9;
-        padding: 6px 12px;
-        border-radius: 6px;
-        display: inline-block;
-        margin: 4px 0 12px 0;
-        border: 1px solid #E2E8F0;
-    }
-    
-    /* Amendment Indicator */
-    .amended-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
-        color: white;
-        font-family: 'Inter', sans-serif;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 6px 12px;
-        border-radius: 6px;
-        margin-bottom: 8px;
-    }
-    
-    /* Strategic Rationale Box */
-    .stTextArea textarea {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 16px !important;
-        border: 2px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        padding: 16px !important;
-        min-height: 120px !important;
-        background: #FAFAFA !important;
-    }
-    
-    .stTextArea textarea:focus {
-        border-color: #10B981 !important;
-        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12) !important;
-        background: #FFFFFF !important;
-    }
-    
-    /* Verdict Box */
-    .verdict-box {
-        background: #FAFAFA;
-        border: 2px solid #E2E8F0;
-        border-radius: 16px;
-        padding: 28px 32px;
-        margin-top: 24px;
-    }
-    
-    .verdict-box.advantage {
-        border-color: #10B981;
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(255,255,255,1) 100%);
-    }
-    
-    .verdict-box.risk {
-        border-color: #F87171;
-        background: linear-gradient(135deg, rgba(248, 113, 113, 0.06) 0%, rgba(255,255,255,1) 100%);
-    }
-    
-    .verdict-box.analysis {
-        border-color: #F59E0B;
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(255,255,255,1) 100%);
-    }
-    
-    /* Metrics - 1.5x Scale */
-    div[data-testid="stMetric"] {
-        background: #FFFFFF;
-        border: 2px solid #E2E8F0;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-    }
-    
-    div[data-testid="stMetric"] label {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 18px !important;
-        font-weight: 700 !important;
-        color: #374151 !important;
-    }
-    
-    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
-        font-size: 2.8rem !important;
-        font-weight: 700 !important;
-    }
-    
-    /* Section Dividers */
-    .section-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent 0%, #E2E8F0 50%, transparent 100%);
-        margin: 40px 0;
-    }
-    
-    /* Footer */
-    .footer {
-        font-family: 'Inter', sans-serif;
-        font-size: 13px;
-        color: #64748B;
-        text-align: center;
-        padding: 40px 0 24px 0;
-        border-top: 1px solid #E2E8F0;
-        margin-top: 56px;
-    }
-    
-    /* Confidential Watermark */
-    .watermark {
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        font-family: 'Inter', sans-serif;
-        font-size: 10px;
-        font-weight: 800;
-        color: rgba(148, 163, 184, 0.35);
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        transform: rotate(-5deg);
-        pointer-events: none;
-        z-index: 1000;
-    }
-    
-    /* Warning State */
-    .rationale-warning {
-        background: linear-gradient(90deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.03) 100%);
-        border-left: 4px solid #F59E0B;
-        padding: 16px 20px;
-        border-radius: 0 12px 12px 0;
-        font-size: 15px;
-        color: #92400E;
-        margin: 16px 0;
-    }
-    
-    /* Character Counter */
-    .char-counter {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 13px;
-        color: #94A3B8;
-        text-align: right;
-        margin-top: 8px;
-    }
-    
-    .char-counter.valid {
-        color: #10B981;
-    }
-</style>
-<div class="watermark">CONFIDENTIAL</div>
-""", unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PRODUCT PHYSICS ARCHETYPES
-# ═══════════════════════════════════════════════════════════════════════════════
-PRODUCT_PHYSICS = {
-    "Unitized — Denominator Collapse": {
-        "description": "Handhelds, bars, bites, pouches, single-serve portions",
-        "scores": {"M": 4, "E": 4, "F": 4, "B": 1, "K": 1, "C": 1},
-        "logic": "The physical structure eliminates decision points. Portion-bound format means the Elbow finishes the job before the Head can arrive."
-    },
-    "Bulk — High Interference Risk": {
-        "description": "Pints, tubs, bags, multi-serve containers",
-        "scores": {"M": 5, "E": 4, "F": 5, "B": 4, "K": 3, "C": 3},
-        "logic": "Open-ended format requires self-managed stopping. Each bite is a new decision point where the Head can interrupt the Elbow."
-    },
-    "Ritual — Habitual Flow": {
-        "description": "Cans, bottles, single-ritual beverages",
-        "scores": {"M": 3, "E": 3, "F": 5, "B": 2, "K": 1, "C": 1},
-        "logic": "Ritual preservation through extreme familiarity. The behavior is so automatic that cognitive interference is structurally suppressed."
-    }
+@dataclass(frozen=True)
+class ScoreSet:
+    """Immutable container for the six behavioral variables."""
+    M: int  # Mouthfeel
+    E: int  # Emotion
+    F: int  # Familiarity
+    B: int  # Bites
+    K: int  # Kinetic
+    C: int  # Cognitive
+
+
+@dataclass(frozen=True)
+class Archetype:
+    """Defines a structural archetype with baseline scores and theory."""
+    name: str
+    description: str
+    scores: ScoreSet
+    logic: str
+
+
+# Archetype Constants
+ARCHETYPES: dict[str, Archetype] = {
+    "Unitized — Denominator Collapse": Archetype(
+        name="Unitized — Denominator Collapse",
+        description="Handhelds, bars, bites, pouches, single-serve",
+        scores=ScoreSet(M=4, E=4, F=4, B=1, K=1, C=1),
+        logic="Portion-bound format eliminates decision points. The Elbow finishes before the Head arrives."
+    ),
+    "Bulk — High Interference Risk": Archetype(
+        name="Bulk — High Interference Risk",
+        description="Pints, tubs, bags, multi-serve containers",
+        scores=ScoreSet(M=5, E=4, F=5, B=4, K=3, C=3),
+        logic="Open-ended format requires self-managed stopping. Each bite is a decision point."
+    ),
+    "Ritual — Habitual Flow": Archetype(
+        name="Ritual — Habitual Flow",
+        description="Cans, bottles, single-ritual beverages",
+        scores=ScoreSet(M=3, E=3, F=5, B=2, K=1, C=1),
+        logic="Ritual preservation through familiarity. Cognitive interference is structurally suppressed."
+    ),
 }
 
-VAR_INFO = {
-    "M": ("Mouthfeel", "How the product feels during consumption — the site of sensory resolution."),
-    "E": ("Emotion", "Rises when expectation is violated and resolved immediately in the body."),
-    "F": ("Familiarity", "Comfort that suppresses interference — the behavioral autopilot."),
-    "B": ("Bites", "Decision count. More bites = more chances for the Head to arrive."),
+# Variable Metadata
+VAR_META: dict[str, tuple[str, str]] = {
+    "M": ("Mouthfeel", "Sensory resolution site — how it feels during consumption."),
+    "E": ("Emotion", "Rises when expectation is violated and resolved in the body."),
+    "F": ("Familiarity", "Comfort that suppresses interference — behavioral autopilot."),
+    "B": ("Bites", "Decision count. More bites = more Head Zone risk."),
     "K": ("Kinetic", "Physical work required to continue consuming."),
-    "C": ("Cognitive", "The interference point. When the Head arrives, the Elbow slows.")
+    "C": ("Cognitive", "The interference point. When the Head arrives, the Elbow slows."),
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SESSION STATE
+# CORE LOGIC ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
-if "rationale" not in st.session_state:
+
+def calculate_s_score(m: int, e: int, f: int, b: int, k: int, c: int) -> float:
+    """
+    Calculate the Structural S-Score™.
+    
+    S = (M × E × F) ÷ (B × K × C)
+    
+    Numerator: Value Delivered (Mouthfeel × Emotion × Familiarity)
+    Denominator: Cost Extracted (Bites × Kinetic × Cognitive)
+    """
+    numerator = m * e * f
+    denominator = b * k * c
+    return numerator / denominator
+
+
+def scores_differ(baseline: ScoreSet, subject: ScoreSet) -> bool:
+    """Check if any subject score differs from baseline."""
+    return (
+        baseline.M != subject.M or
+        baseline.E != subject.E or
+        baseline.F != subject.F or
+        baseline.B != subject.B or
+        baseline.K != subject.K or
+        baseline.C != subject.C
+    )
+
+
+def validate_rationale(text: str, min_length: int = 25) -> bool:
+    """Validate rationale meets minimum meaningful length."""
+    return len(text.strip()) > min_length
+
+
+def get_delta_display(baseline: int, subject: int) -> str:
+    """Generate delta display string for amended values."""
+    diff = subject - baseline
+    if diff == 0:
+        return ""
+    sign = "+" if diff > 0 else ""
+    return f"Δ {sign}{diff} from baseline ({baseline})"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATE MACHINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def init_session_state(archetype: Archetype) -> None:
+    """Initialize or reset session state to archetype defaults."""
+    st.session_state.baseline = archetype.scores
+    st.session_state.subject = ScoreSet(
+        M=archetype.scores.M,
+        E=archetype.scores.E,
+        F=archetype.scores.F,
+        B=archetype.scores.B,
+        K=archetype.scores.K,
+        C=archetype.scores.C,
+    )
     st.session_state.rationale = ""
+    st.session_state.current_archetype = archetype.name
+
+
+def sync_archetype_change(selected: str) -> Archetype:
+    """Handle archetype selection changes and reset state if needed."""
+    archetype = ARCHETYPES[selected]
+    
+    # Reset state if archetype changed
+    if st.session_state.get("current_archetype") != selected:
+        init_session_state(archetype)
+    
+    return archetype
+
+
+def compute_lock_state(baseline: ScoreSet, subject: ScoreSet, rationale: str) -> bool:
+    """Determine if the Subject S-Score should be locked."""
+    has_amendments = scores_differ(baseline, subject)
+    has_valid_rationale = validate_rationale(rationale)
+    
+    # Locked if: amendments exist AND rationale is insufficient
+    return has_amendments and not has_valid_rationale
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR — INSTITUTIONAL DATA FEED
+# THEME
 # ═══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("## ◈ ELBOW ZONE™")
-    st.caption("Behavioral Audit Terminal")
-    
-    st.markdown("---")
-    
-    # Data Upload
-    st.markdown("### 📊 Circana / MULO Data")
-    uploaded_file = st.file_uploader(
-        "Upload syndicated data",
-        type=["csv"],
-        help="Drop Circana or MULO CSV to calibrate Presence vs. Persistence metrics"
-    )
-    
-    if uploaded_file:
-        st.success("✓ Presence data loaded")
-    else:
-        st.info("Structural analysis mode (no external data)")
-    
-    st.markdown("---")
-    
-    # Product Physics Selector
-    st.markdown("### 🏗️ Product Physics")
-    selected_physics = st.selectbox(
-        "Select structural archetype",
-        list(PRODUCT_PHYSICS.keys()),
-        help="This sets the Baseline scores based on the physical form factor"
-    )
-    
-    physics = PRODUCT_PHYSICS[selected_physics]
-    st.caption(physics["description"])
-    
-    with st.expander("View Structural Logic"):
-        st.write(physics["logic"])
-    
-    st.markdown("---")
-    
-    # Variable Reference
-    st.markdown("### 📖 Variable Definitions")
-    with st.expander("Expand Reference"):
-        for key, (name, desc) in VAR_INFO.items():
-            st.markdown(f"**{key} ({name})**: {desc}")
-    
-    st.markdown("---")
-    
-    # Copyright
+
+def inject_theme() -> None:
+    """Inject institutional CSS theme."""
     st.markdown("""
-    <div style='text-align: center; font-size: 11px; color: #94A3B8; padding: 12px 0;'>
-        © 2026 Russell Barnett<br>
-        The Elbow Interference Theory™<br>
-        All Rights Reserved
-    </div>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+        
+        .main { background: #FFFFFF; font-family: 'Inter', sans-serif; }
+        .stApp { background: #FFFFFF; }
+        
+        section[data-testid="stSidebar"] {
+            background: #FAFAFA;
+            border-right: 1px solid #E5E7EB;
+        }
+        
+        h1 { font-weight: 900 !important; font-size: 2.4rem !important; color: #0F172A !important; letter-spacing: -0.03em; }
+        h2 { font-weight: 800 !important; font-size: 1.6rem !important; color: #1E293B !important; }
+        h3 { font-weight: 700 !important; font-size: 1.2rem !important; color: #334155 !important; }
+        
+        .stSlider label { font-size: 18px !important; font-weight: 600 !important; color: #1E293B !important; }
+        
+        div[data-testid="stMetric"] {
+            background: #FFFFFF;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        div[data-testid="stMetric"] label { font-size: 16px !important; font-weight: 700 !important; }
+        div[data-testid="stMetric"] div[data-testid="stMetricValue"] { 
+            font-family: 'JetBrains Mono', monospace !important; 
+            font-size: 2.2rem !important; 
+        }
+        
+        .equation-banner {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            color: #F8FAFC;
+            padding: 28px 36px;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            text-align: center;
+            margin: 20px 0 28px 0;
+            box-shadow: 0 8px 32px rgba(15, 23, 42, 0.15);
+        }
+        
+        .column-header {
+            font-size: 1rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 16px 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        
+        .column-header.baseline { background: #F1F5F9; border: 2px solid #CBD5E1; color: #475569; }
+        .column-header.subject { background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(52,211,153,0.05) 100%); border: 2px solid #10B981; color: #059669; }
+        
+        .delta-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #10B981;
+            background: rgba(16,185,129,0.1);
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+        
+        .locked-metric {
+            background: linear-gradient(135deg, #64748B 0%, #94A3B8 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .score-metric.advantage { border-color: #10B981 !important; }
+        .score-metric.risk { border-color: #F87171 !important; }
+        
+        .stTextArea textarea {
+            font-family: 'Inter', sans-serif !important;
+            font-size: 15px !important;
+            border: 2px solid #E2E8F0 !important;
+            border-radius: 10px !important;
+            padding: 14px !important;
+        }
+        
+        .stTextArea textarea:focus { border-color: #10B981 !important; }
+        
+        .char-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94A3B8; text-align: right; }
+        .char-count.valid { color: #10B981; }
+        
+        .footer {
+            font-size: 12px;
+            color: #64748B;
+            text-align: center;
+            padding: 32px 0;
+            border-top: 1px solid #E2E8F0;
+            margin-top: 48px;
+        }
+        
+        .watermark {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            color: rgba(148,163,184,0.3);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            transform: rotate(-5deg);
+            pointer-events: none;
+        }
+    </style>
+    <div class="watermark">CONFIDENTIAL</div>
     """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# MAIN TERMINAL
-# ═══════════════════════════════════════════════════════════════════════════════
-
-st.markdown("# ELBOW ZONE™")
-st.caption("Strategic Behavioral Audit Terminal")
-
-# Equation Banner
-st.markdown("""
-<div class="equation-banner">
-    <div style="font-size: 1rem; font-weight: 600; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 8px;">
-        THE SATISFACTION EQUATION
-    </div>
-    <div class="equation">
-        S = (M × E × F) ÷ (B × K × C)
-    </div>
-    <div class="subtitle">
-        Value Delivered ÷ Cost Extracted = Structural Persistence
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown(f"**Active Physics:** {selected_physics}")
-
-st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DUAL-COLUMN AUDIT
+# UI COMPONENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-col_baseline, col_subject = st.columns(2)
+def render_sidebar() -> str:
+    """Render sidebar and return selected archetype key."""
+    with st.sidebar:
+        st.markdown("## ◈ ELBOW ZONE™")
+        st.caption("Behavioral Audit Terminal")
+        
+        st.divider()
+        
+        # File Upload
+        st.markdown("### 📊 Data Upload")
+        uploaded = st.file_uploader(
+            "Circana / MULO CSV",
+            type=["csv"],
+            help="Upload syndicated data to calibrate Presence vs Persistence"
+        )
+        
+        if uploaded:
+            st.success("✓ Data loaded")
+        
+        st.divider()
+        
+        # Archetype Selection
+        st.markdown("### 🏗️ Structural Archetype")
+        selected = st.selectbox(
+            "Product Physics",
+            options=list(ARCHETYPES.keys()),
+            help="Sets the Baseline scores for the audit"
+        )
+        
+        archetype = ARCHETYPES[selected]
+        st.caption(archetype.description)
+        
+        with st.expander("Structural Logic"):
+            st.write(archetype.logic)
+        
+        st.divider()
+        
+        # Variable Reference
+        st.markdown("### 📖 Variables")
+        with st.expander("Definitions"):
+            for key, (name, desc) in VAR_META.items():
+                st.markdown(f"**{key}** · {name}: {desc}")
+        
+        st.divider()
+        
+        st.markdown("""
+        <div style='text-align:center; font-size:11px; color:#94A3B8;'>
+            © 2026 Russell Barnett<br>
+            The Elbow Interference Theory™
+        </div>
+        """, unsafe_allow_html=True)
+    
+    return selected
 
-baseline = physics["scores"]
-amendments_made = False
 
-with col_baseline:
-    st.markdown('<div class="column-header baseline">📊 BASELINE — The Law</div>', unsafe_allow_html=True)
-    st.caption("Category structural norms (locked to Product Physics)")
-    
-    st.markdown("##### NUMERATOR — Value Delivered")
-    
-    base_m = st.slider(
-        f"M · {VAR_INFO['M'][0]}", 1, 5, baseline["M"],
-        key="base_m", disabled=True, help=VAR_INFO["M"][1]
-    )
-    base_e = st.slider(
-        f"E · {VAR_INFO['E'][0]}", 1, 5, baseline["E"],
-        key="base_e", disabled=True, help=VAR_INFO["E"][1]
-    )
-    base_f = st.slider(
-        f"F · {VAR_INFO['F'][0]}", 1, 5, baseline["F"],
-        key="base_f", disabled=True, help=VAR_INFO["F"][1]
-    )
-    
-    st.markdown("##### DENOMINATOR — Cost Extracted")
-    
-    base_b = st.slider(
-        f"B · {VAR_INFO['B'][0]}", 1, 5, baseline["B"],
-        key="base_b", disabled=True, help=VAR_INFO["B"][1]
-    )
-    base_k = st.slider(
-        f"K · {VAR_INFO['K'][0]}", 1, 5, baseline["K"],
-        key="base_k", disabled=True, help=VAR_INFO["K"][1]
-    )
-    base_c = st.slider(
-        f"C · {VAR_INFO['C'][0]}", 1, 5, baseline["C"],
-        key="base_c", disabled=True, help=VAR_INFO["C"][1]
+def render_slider_with_delta(
+    label: str,
+    key: str,
+    baseline_value: int,
+    help_text: str,
+    disabled: bool = False
+) -> int:
+    """Render a slider with optional delta display."""
+    value = st.slider(
+        label,
+        min_value=1,
+        max_value=5,
+        value=baseline_value,
+        key=key,
+        help=help_text,
+        disabled=disabled
     )
     
-    # Calculate Baseline S-Score
-    s_baseline = (base_m * base_e * base_f) / (base_b * base_k * base_c)
+    # Show delta if not disabled and value differs
+    if not disabled:
+        delta_text = get_delta_display(baseline_value, value)
+        if delta_text:
+            st.markdown(f'<span class="delta-badge">{delta_text}</span>', unsafe_allow_html=True)
     
-    st.markdown(f"""
-    <div class="score-box elbow-zone">
-        <div class="score-value">{s_baseline:.2f}</div>
-        <div class="score-label">Baseline S-Score™</div>
-    </div>
-    """, unsafe_allow_html=True)
+    return value
 
-with col_subject:
-    st.markdown('<div class="column-header subject">🎯 SUBJECT — The Amendment</div>', unsafe_allow_html=True)
-    st.caption("Adjust scores to model your Subject's structural reality")
+
+def render_baseline_column(baseline: ScoreSet) -> float:
+    """Render the Baseline column (read-only)."""
+    st.markdown('<div class="column-header baseline">📊 BASELINE</div>', unsafe_allow_html=True)
+    st.caption("Category structural norms (locked)")
     
-    st.markdown("##### NUMERATOR — Value Delivered")
+    st.markdown("**NUMERATOR** — Value Delivered")
+    render_slider_with_delta(f"M · {VAR_META['M'][0]}", "bl_m", baseline.M, VAR_META['M'][1], disabled=True)
+    render_slider_with_delta(f"E · {VAR_META['E'][0]}", "bl_e", baseline.E, VAR_META['E'][1], disabled=True)
+    render_slider_with_delta(f"F · {VAR_META['F'][0]}", "bl_f", baseline.F, VAR_META['F'][1], disabled=True)
     
-    # M
-    subj_m = st.slider(
-        f"M · {VAR_INFO['M'][0]}", 1, 5, baseline["M"],
-        key="subj_m", help=VAR_INFO["M"][1]
-    )
-    if subj_m != baseline["M"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["M"]}</span>', unsafe_allow_html=True)
+    st.markdown("**DENOMINATOR** — Cost Extracted")
+    render_slider_with_delta(f"B · {VAR_META['B'][0]}", "bl_b", baseline.B, VAR_META['B'][1], disabled=True)
+    render_slider_with_delta(f"K · {VAR_META['K'][0]}", "bl_k", baseline.K, VAR_META['K'][1], disabled=True)
+    render_slider_with_delta(f"C · {VAR_META['C'][0]}", "bl_c", baseline.C, VAR_META['C'][1], disabled=True)
     
-    # E
-    subj_e = st.slider(
-        f"E · {VAR_INFO['E'][0]}", 1, 5, baseline["E"],
-        key="subj_e", help=VAR_INFO["E"][1]
-    )
-    if subj_e != baseline["E"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["E"]}</span>', unsafe_allow_html=True)
+    s_baseline = calculate_s_score(baseline.M, baseline.E, baseline.F, baseline.B, baseline.K, baseline.C)
     
-    # F
-    subj_f = st.slider(
-        f"F · {VAR_INFO['F'][0]}", 1, 5, baseline["F"],
-        key="subj_f", help=VAR_INFO["F"][1]
-    )
-    if subj_f != baseline["F"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["F"]}</span>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.metric("Baseline S-Score™", f"{s_baseline:.2f}")
     
-    st.markdown("##### DENOMINATOR — Cost Extracted")
+    return s_baseline
+
+
+def render_subject_column(baseline: ScoreSet) -> tuple[ScoreSet, str]:
+    """Render the Subject column (editable) and return current values + rationale."""
+    st.markdown('<div class="column-header subject">🎯 SUBJECT</div>', unsafe_allow_html=True)
+    st.caption("Adjust to model your Subject's structure")
     
-    # B
-    subj_b = st.slider(
-        f"B · {VAR_INFO['B'][0]}", 1, 5, baseline["B"],
-        key="subj_b", help=VAR_INFO["B"][1]
-    )
-    if subj_b != baseline["B"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["B"]}</span>', unsafe_allow_html=True)
+    st.markdown("**NUMERATOR** — Value Delivered")
+    m = render_slider_with_delta(f"M · {VAR_META['M'][0]}", "su_m", baseline.M, VAR_META['M'][1])
+    e = render_slider_with_delta(f"E · {VAR_META['E'][0]}", "su_e", baseline.E, VAR_META['E'][1])
+    f = render_slider_with_delta(f"F · {VAR_META['F'][0]}", "su_f", baseline.F, VAR_META['F'][1])
     
-    # K
-    subj_k = st.slider(
-        f"K · {VAR_INFO['K'][0]}", 1, 5, baseline["K"],
-        key="subj_k", help=VAR_INFO["K"][1]
-    )
-    if subj_k != baseline["K"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["K"]}</span>', unsafe_allow_html=True)
+    st.markdown("**DENOMINATOR** — Cost Extracted")
+    b = render_slider_with_delta(f"B · {VAR_META['B'][0]}", "su_b", baseline.B, VAR_META['B'][1])
+    k = render_slider_with_delta(f"K · {VAR_META['K'][0]}", "su_k", baseline.K, VAR_META['K'][1])
+    c = render_slider_with_delta(f"C · {VAR_META['C'][0]}", "su_c", baseline.C, VAR_META['C'][1])
     
-    # C
-    subj_c = st.slider(
-        f"C · {VAR_INFO['C'][0]}", 1, 5, baseline["C"],
-        key="subj_c", help=VAR_INFO["C"][1]
-    )
-    if subj_c != baseline["C"]:
-        amendments_made = True
-        st.markdown(f'<span class="amended-badge">AMENDED</span> <span class="ghost-value">Baseline: {baseline["C"]}</span>', unsafe_allow_html=True)
+    subject = ScoreSet(M=m, E=e, F=f, B=b, K=k, C=c)
     
-    # ═══════════════════════════════════════════════════════════════════════════
-    # JUSTIFICATION GATE
-    # ═══════════════════════════════════════════════════════════════════════════
+    # Rationale input (only show if amendments exist)
+    rationale = ""
+    has_amendments = scores_differ(baseline, subject)
     
-    if amendments_made:
+    if has_amendments:
         st.markdown("---")
-        st.markdown("##### 📝 Strategic Rationale")
-        st.caption("Explain the structural reasoning behind your amendments (minimum 25 characters)")
+        st.markdown("**📝 Strategic Rationale**")
+        st.caption("Explain amendments to unlock the Subject S-Score (>25 chars)")
         
         rationale = st.text_area(
-            "Strategic Rationale",
-            value=st.session_state.rationale,
-            placeholder="Describe why the Subject differs from the category baseline...\n\nExample: 'Premium price point creates cognitive friction at point-of-sale, but novel mochi texture delivers immediate sensory resolution that suppresses post-purchase doubt.'",
+            "Rationale",
+            value=st.session_state.get("rationale", ""),
+            placeholder="Describe the structural reasoning behind your amendments...",
             label_visibility="collapsed",
             key="rationale_input"
         )
         st.session_state.rationale = rationale
         
-        # Character count
         char_count = len(rationale.strip())
-        is_valid = char_count >= 25
-        
-        counter_class = "char-counter valid" if is_valid else "char-counter"
-        st.markdown(f'<div class="{counter_class}">{char_count} / 25 characters</div>', unsafe_allow_html=True)
-        
-        if not is_valid:
-            st.markdown("""
-            <div class="rationale-warning">
-                ⚠️ <strong>Rationale Required</strong> — Provide at least 25 characters of strategic reasoning to unlock the Subject S-Score.
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        is_valid = True
-        rationale = ""
+        is_valid = char_count > 25
+        css_class = "char-count valid" if is_valid else "char-count"
+        st.markdown(f'<div class="{css_class}">{char_count} / 25 characters</div>', unsafe_allow_html=True)
     
-    # Calculate or Lock Subject S-Score
-    if amendments_made and not is_valid:
-        st.markdown(f"""
-        <div class="score-box locked-score">
-            <div class="score-value">[LOCKED: RATIONALE REQUIRED]</div>
-            <div class="score-label">Subject S-Score™</div>
-        </div>
-        """, unsafe_allow_html=True)
-        s_subject = None
-    else:
-        s_subject = (subj_m * subj_e * subj_f) / (subj_b * subj_k * subj_c)
-        
-        if s_subject >= s_baseline:
-            zone_class = "elbow-zone"
-        else:
-            zone_class = "head-zone"
-        
-        st.markdown(f"""
-        <div class="score-box {zone_class}">
-            <div class="score-value">{s_subject:.2f}</div>
-            <div class="score-label">Subject S-Score™</div>
-        </div>
-        """, unsafe_allow_html=True)
+    return subject, rationale
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# STRATEGIC VERDICT
-# ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-
-st.markdown("## 📋 Strategic Verdict")
-
-if s_subject is not None:
-    delta = s_subject - s_baseline
-    
-    # Metrics Row
-    m1, m2, m3 = st.columns(3)
-    
-    with m1:
-        st.metric("Baseline S-Score™", f"{s_baseline:.2f}")
-    with m2:
-        st.metric("Subject S-Score™", f"{s_subject:.2f}", delta=round(delta, 2))
-    with m3:
-        efficiency = ((s_subject / s_baseline) - 1) * 100 if s_baseline > 0 else 0
-        st.metric("Efficiency Gap", f"{efficiency:+.1f}%")
-    
+def render_subject_score(
+    subject: ScoreSet,
+    s_baseline: float,
+    is_locked: bool
+) -> Optional[float]:
+    """Render the Subject S-Score metric (locked or calculated)."""
     st.markdown("---")
     
-    # AI Analyst Synthesis
+    if is_locked:
+        st.markdown("""
+        <div class="locked-metric">
+            JUSTIFICATION REQUIRED
+        </div>
+        """, unsafe_allow_html=True)
+        return None
+    
+    s_subject = calculate_s_score(subject.M, subject.E, subject.F, subject.B, subject.K, subject.C)
+    delta = s_subject - s_baseline
+    
+    st.metric("Subject S-Score™", f"{s_subject:.2f}", delta=round(delta, 2))
+    
+    return s_subject
+
+
+def render_verdict(
+    s_baseline: float,
+    s_subject: Optional[float],
+    subject: ScoreSet,
+    rationale: str
+) -> None:
+    """Render the Strategic Verdict section."""
+    st.markdown("---")
+    st.markdown("## 📋 Strategic Verdict")
+    
+    if s_subject is None:
+        st.warning("**Analysis Locked** — Provide strategic rationale for your amendments to unlock.")
+        return
+    
+    delta = s_subject - s_baseline
+    efficiency = ((s_subject / s_baseline) - 1) * 100 if s_baseline > 0 else 0
+    
+    # Summary Metrics
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Baseline", f"{s_baseline:.2f}")
+    c2.metric("Subject", f"{s_subject:.2f}", delta=round(delta, 2))
+    c3.metric("Efficiency", f"{efficiency:+.1f}%")
+    
+    st.markdown("---")
     st.markdown("### 🧠 AI Analyst Synthesis")
     
-    # Determine verdict type and generate analysis
-    if subj_c >= 4:
-        verdict_class = "analysis"
-        verdict_header = "⚠️ FURTHER ANALYSIS REQUIRED"
-        
-        verdict_body = f"""
-**High Cognitive Interference Detected** (C = {subj_c})
-
-The Subject exhibits elevated cognitive load in the Denominator, indicating the **Head Zone arrives before the occasion naturally concludes**. 
-This represents a structural barrier to repeat behavior—each consumption instance requires conscious re-evaluation.
-
-**Elbow → Head Transition:** The consumer's automatic behavior (Elbow Zone) is interrupted by deliberate processing (Head Zone). 
-The structural advantage of the category baseline is compromised by this cognitive friction.
-"""
-        if amendments_made and rationale:
-            verdict_body += f"\n**Analyst Rationale:** *\"{rationale}\"*"
-        
-        verdict_body += """
-
-**Recommendation:** Investigate whether the value proposition justifies the cognitive cost, or whether repositioning can reduce the Head Zone trigger point.
-"""
+    # Verdict Logic (functional approach - no nested ifs)
+    is_high_cognitive = subject.C >= 4
+    is_structural_risk = delta < 0
     
-    elif delta < 0:
-        verdict_class = "risk"
-        verdict_header = "🔴 STRUCTURAL RISK DETECTED"
-        
-        verdict_body = f"""
-**Subject Fails to Match Category Efficiency**
-
-The Subject S-Score ({s_subject:.2f}) trails the Baseline ({s_baseline:.2f}) by **{abs(delta):.2f} points**, 
-indicating higher behavioral cost relative to value delivered.
-
-**Head Zone Analysis:** The Subject's Denominator creates more interference points than the category norm. 
-The Elbow slows earlier in the consumption occasion, allowing the Head to arrive and evaluate.
-
-**Structural Persistence:** Currently **unproven**. Without Denominator Collapse, velocity must be purchased through 
-marketing, distribution, and promotion rather than earned through repeat structure.
-"""
-        if amendments_made and rationale:
-            verdict_body += f"\n**Analyst Rationale:** *\"{rationale}\"*"
+    verdict_type, verdict_body = generate_verdict(
+        s_baseline, s_subject, delta, subject, rationale,
+        is_high_cognitive, is_structural_risk
+    )
     
-    else:
-        verdict_class = "advantage"
-        verdict_header = "🟢 STRUCTURAL ADVANTAGE CONFIRMED"
-        
-        verdict_body = f"""
-**Subject Demonstrates Superior Repeat Efficiency**
-
-The Subject S-Score ({s_subject:.2f}) exceeds the Baseline ({s_baseline:.2f}) by **{delta:.2f} points**, 
-indicating lower behavioral cost relative to value delivered.
-
-**Elbow Zone Dominance:** The Subject's physical structure supports automatic repeat behavior. 
-The consumption occasion completes before cognitive interference can trigger the Head Zone.
-
-**Structural Persistence:** The format does the work. Repeat behavior is **structurally embedded** rather than 
-requiring continuous external activation.
-"""
-        if amendments_made and rationale:
-            verdict_body += f"\n**Analyst Rationale:** *\"{rationale}\"*"
-    
-    st.markdown(f'<div class="verdict-box {verdict_class}">', unsafe_allow_html=True)
-    st.markdown(f"#### {verdict_header}")
     st.markdown(verdict_body)
-    st.markdown('</div>', unsafe_allow_html=True)
     
-    # Persistence Commentary
+    # Persistence Status
     st.markdown("---")
     st.markdown("### Persistence Status")
     
-    denom_avg = (subj_b + subj_k + subj_c) / 3
+    denom_avg = (subject.B + subject.K + subject.C) / 3
+    persistence_achieved = denom_avg <= 1.5
     
-    if denom_avg <= 1.5:
-        st.success("✓ **Denominator Collapse Achieved** — Structural Persistence is built into the format. The Elbow finishes the job.")
+    if persistence_achieved:
+        st.success("✓ **Denominator Collapse Achieved** — Structural Persistence is built into the format.")
     else:
-        st.warning("⚡ **Velocity is currently purchased; Structural Persistence is unproven** until Denominator Collapse is achieved.")
+        st.warning("⚡ **Velocity is currently purchased** — Structural Persistence unproven until Denominator Collapse.")
     
-    st.info("💡 *This signal measures Persistence (Repeat) not Presence (Trial). A lack of data is not a lack of structure—look at the Denominator.*")
+    st.info("💡 *This signal measures Persistence (Repeat) not Presence (Trial).*")
 
-else:
-    st.warning("**Verdict Locked** — Complete the Strategic Rationale for your amendments to unlock the AI Analyst Synthesis.")
+
+def generate_verdict(
+    s_baseline: float,
+    s_subject: float,
+    delta: float,
+    subject: ScoreSet,
+    rationale: str,
+    is_high_cognitive: bool,
+    is_structural_risk: bool
+) -> tuple[str, str]:
+    """Generate verdict text based on analysis state."""
+    
+    rationale_text = f'\n\n**Analyst Rationale:** *"{rationale}"*' if rationale.strip() else ""
+    
+    if is_high_cognitive:
+        return ("analysis", f"""
+⚠️ **FURTHER ANALYSIS REQUIRED**
+
+High Cognitive Interference (C = {subject.C}) indicates the **Head Zone arrives before the occasion concludes**.
+
+The consumer's automatic behavior (Elbow Zone) is interrupted by deliberate processing. 
+This represents a structural barrier to repeat — each instance requires conscious re-evaluation.
+{rationale_text}
+
+*Recommendation: Investigate whether value justifies cognitive cost, or reposition to reduce Head Zone trigger.*
+""")
+    
+    if is_structural_risk:
+        return ("risk", f"""
+🔴 **STRUCTURAL RISK DETECTED**
+
+Subject S-Score ({s_subject:.2f}) trails Baseline ({s_baseline:.2f}) by **{abs(delta):.2f} points**.
+
+The Subject's Denominator creates more interference points than category norm.
+The Elbow slows earlier, allowing the Head to arrive and evaluate.
+
+**Persistence:** Unproven. Without Denominator Collapse, velocity must be purchased through marketing.
+{rationale_text}
+""")
+    
+    return ("advantage", f"""
+🟢 **STRUCTURAL ADVANTAGE CONFIRMED**
+
+Subject S-Score ({s_subject:.2f}) exceeds Baseline ({s_baseline:.2f}) by **{delta:.2f} points**.
+
+The Subject's physical structure supports automatic repeat behavior.
+Consumption completes before cognitive interference triggers the Head Zone.
+
+**Persistence:** Structurally embedded — the format does the work.
+{rationale_text}
+""")
+
+
+def render_footer() -> None:
+    """Render the footer."""
+    st.markdown("""
+    <div class="footer">
+        <strong>ELBOW ZONE™</strong> | Behavioral Audit Terminal<br>
+        © 2026 Russell Barnett. The Elbow Interference Theory™. All Rights Reserved.<br><br>
+        <em>"When the Head arrives, the Elbow slows."</em>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FOOTER
+# MAIN APPLICATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("""
-<div class="footer">
-    <strong>ELBOW ZONE™</strong> | Behavioral Audit Terminal<br>
-    © 2026 Russell Barnett. The Elbow Interference Theory™. All Rights Reserved.<br><br>
-    <em>"When the Head arrives, the Elbow slows. Structure the Denominator, and the behavior sustains itself."</em>
-</div>
-""", unsafe_allow_html=True)
+def main() -> None:
+    """Main application entry point."""
+    
+    # 1. Inject Theme
+    inject_theme()
+    
+    # 2. Render Sidebar & Get Selected Archetype
+    selected_archetype_key = render_sidebar()
+    
+    # 3. Sync State Machine with Archetype Selection
+    archetype = sync_archetype_change(selected_archetype_key)
+    baseline = archetype.scores
+    
+    # 4. Render Header
+    st.markdown("# ELBOW ZONE™")
+    st.caption("Strategic Behavioral Audit Terminal")
+    
+    # 5. Equation Banner
+    st.markdown("""
+    <div class="equation-banner">
+        <div style="font-size: 0.9rem; opacity: 0.7; letter-spacing: 0.1em; margin-bottom: 8px;">
+            THE SATISFACTION EQUATION
+        </div>
+        <div style="font-size: 1.8rem; font-weight: 600;">
+            S = (M × E × F) ÷ (B × K × C)
+        </div>
+        <div style="font-size: 0.85rem; opacity: 0.6; margin-top: 8px;">
+            Value Delivered ÷ Cost Extracted = Structural Persistence
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"**Active Archetype:** {archetype.name}")
+    
+    # 6. Dual-Column Layout
+    col_baseline, col_subject = st.columns(2)
+    
+    with col_baseline:
+        s_baseline = render_baseline_column(baseline)
+    
+    with col_subject:
+        subject, rationale = render_subject_column(baseline)
+        
+        # Compute Lock State
+        is_locked = compute_lock_state(baseline, subject, rationale)
+        
+        # Render Subject Score
+        s_subject = render_subject_score(subject, s_baseline, is_locked)
+    
+    # 7. Strategic Verdict
+    render_verdict(s_baseline, s_subject, subject, rationale)
+    
+    # 8. Footer
+    render_footer()
+
+
+# Entry Point
+if __name__ == "__main__":
+    main()
