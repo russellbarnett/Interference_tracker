@@ -12,48 +12,10 @@ warnings.filterwarnings("ignore")
 import streamlit as st
 import pandas as pd
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List, Any
 import json
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# INLINE TOOLTIP COPY (single-file, no extra modules)
-# Streamlit shows this as a small "?" icon automatically on widgets that support `help=`
-# ═══════════════════════════════════════════════════════════════════════════════
-
-TOOLTIPS = {
-    # Global
-    "equation": "S = Satisfaction. Value Delivered ÷ Cost Extracted = Satisfaction. Satisfaction enables persistence over time, but persistence is not the equation itself.",
-    "brand_name": "Enter the brand as a consumer recognizes it (typos are fine).",
-    "format": "Format sets baseline friction. Portion-bound ends the occasion. Self-managed requires stopping decisions.",
-    "occasion_free_text": "Optional. Adds context to the memo. Does not change math unless you use Priors.",
-
-    # Six variables
-    "M": "Mouthfeel: texture and physical experience while consuming.",
-    "E": "Emotion: the payoff during consumption (comfort, indulgence, relief).",
-    "F": "Familiarity: how established the brand is in real life (habit, ritual, legacy).",
-    "B": "Bites: how many stop/continue decisions happen before the occasion ends.",
-    "K": "Kinetic: physical effort to keep consuming (prep, tools, cleanup, handling).",
-    "C": "Cognitive: how much thinking, evaluation, or self-control the product triggers.",
-
-    # Overrides
-    "override_rationale": "If you override a score, explain why. Keeps assumptions explicit and audit-able.",
-
-    # Priors
-    "priors_toggle": "Applies behavioral priors (context adjustments). Turn off for sensitivity checks.",
-    "cohort": "Who is the buyer? Younger cohorts often carry higher messaging friction in values-heavy categories.",
-    "priors_occasion": "Primary usage context. Occasion changes how friction and familiarity land.",
-    "macro_stress": "When stress is active, Familiarity gets more weight (people default to known choices).",
-    "promo_frequency": "Share of weeks on deal. High reliance implies velocity is being purchased.",
-    "promo_depth": "Average discount depth. Deeper discount implies more purchased velocity risk.",
-    "ups_13": "Units per store per week (last 13 weeks). Used for Repeat Momentum signal.",
-    "ups_26": "Units per store per week (last 26 weeks). Used for Repeat Momentum signal.",
-
-    # Upload
-    "upload": "Upload CSV/Excel/PDF/Word/PPT/Text. Used for reference, context, and (optionally) priors inputs.",
-}
-
-def tip(key: str) -> str:
-    return TOOLTIPS.get(key, "")
+from config import TOOLTIPS, tip, DEFAULT_CATEGORY
 
 # Import priors module for behavioral adjustments
 try:
@@ -78,712 +40,22 @@ except ImportError:
     HARD_DATA_AVAILABLE = False
     print("[HARD_DATA] Module not available")
 
-# ═══════════════════════════════════════════════════════════════════════════════════════
-# GEMINI AI INTEGRATION
-# ═══════════════════════════════════════════════════════════════════════════════════════
-
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-
-def get_gemini_model():
-    """Initialize Gemini model with API key from secrets."""
-    if not GEMINI_AVAILABLE:
-        print("[GEMINI] Library not available")
-        return None
-    try:
-        api_key = st.secrets.get("GEMINI_API_KEY", "")
-        if not api_key or api_key == "YOUR_KEY_HERE":
-            print("[GEMINI] No API key configured")
-            return None
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        print(f"[GEMINI] ✓ Model initialized (gemini-2.0-flash)")
-        return model
-    except Exception as e:
-        print(f"[GEMINI] ✗ Error: {e}")
-        return None
-
-# The complete White Paper content for AI prompts
-WHITE_PAPER_CONTEXT = """
-THE ELBOW INTERFERENCE THEORY™ - FULL WHITE PAPER BY RUSSELL BARNETT
-
-CORE CONCEPT:
-Most products fail not because they lack quality, but because they ask too much of the consumer at the wrong moment.
-Consumption begins in the elbow - the body acting without deliberation. Reaching, opening, tasting. The head is not involved.
-But at some point, the head arrives. The consumer becomes aware they are consuming. They evaluate. They decide whether to continue.
-The transition from elbow to head is the interference point. The longer the elbow runs uninterrupted, the more consumption compounds quietly.
-
-KEY INSIGHT: Products do not compete on taste alone. They compete on how long they delay the head.
-
-THE SATISFACTION EQUATION:
-S = (M × E × F) ÷ (B × K × C)
-
-VALUE DELIVERED (Numerator):
-- M (Mouthfeel): How the product feels in the mouth during consumption
-- E (Emotion): The feeling the product creates while being consumed  
-- F (Familiarity): How recognizable and comfortable the experience is
-
-COST EXTRACTED (Denominator):
-- B (Bites): How many decisions the consumer makes before the occasion ends
-- K (Kinetic Effort): The physical work required to continue consuming
-- C (Cognitive Interference): How much the product asks the consumer to think
-
-INTERPRETATION: S = Satisfaction. The option with higher S (Satisfaction) repeats more easily. The gap between scores tells you how large the behavioral advantage is.
-
-CRITICAL INSIGHT ON FRICTION:
-Friction compounds. Pleasure does not. A product rarely fails because of one flaw. It fails because multiple small frictions stack until the head interrupts the elbow.
-
-CASE STUDY - MY/MOCHI (Structural Compounder):
-- Handheld, portion-bound, no spoon, no stick, one motion from freezer to mouth
-- Did NOT replace pints - served a different job (frozen snacking vs ice cream eating)
-- Scores: M=4 (differentiated chew), E=4 (novel/surprising), F=3 (moderate initially)
-- Denominator: B=1 (portion-bound), K=1 (single motion), C=1 (occasion ends automatically)
-- S-Score: 16.0 - DENOMINATOR COLLAPSE achieved
-- Key: "My/Mochi delays the head by ending the event"
-
-CASE STUDY - PINT ICE CREAM (High Interference):
-- Multiple bites, self-managed stopping, spoon/bowl ritual
-- Scores: M=5 (category benchmark), E=5 (high indulgence), F=5 (very familiar)
-- Denominator: B=4-5 (many decision points), K=3 (spoon/thaw/cleanup), C=3-4 (guilt, stopping decisions)
-- S-Score: ~1.6-2.2
-- Key: "The head arrives when stopping becomes self-managed"
-
-THE CRITICAL DISTINCTION - FAMILIARITY (F):
-- Legacy brands with decades of presence = F=5 (e.g., Serendipity has NYC ritual since 1954)
-- New entrants/startups = F=2-3 (consumers must learn the product)
-- Celebrity launches = F=3 (novelty, not ritual - the celebrity is familiar but the PRODUCT is not)
-
-THE CRITICAL DISTINCTION - COGNITIVE INTERFERENCE (C):
-- Legacy brands you buy on autopilot = C=1-2
-- Premium pricing requiring justification = C=3-4  
-- Celebrity brands = C=4-5 because "celebrity branding invites the Head Zone to audit the purchase"
-- The Snoop Dogg hook is CONCEPTUAL (requires thinking). My/Mochi's success was EMBODIED (resolved in the mouth)
-- "Conceptual hooks are harder and more expensive to defend over time"
-
-THE "YEAR 5 SWING" RISK:
-For high-interference brands, once novelty fades, the Head Zone must manually "authorize" the purchase. This creates a "Behavioral Margin Call" where velocity must be purchased through sustained spend rather than quiet compounding.
-
-PRESENCE VS PERSISTENCE:
-- TAM (Total Addressable Market) measures PRESENCE - how many consumers might consider a product
-- S-Score = Satisfaction. Higher Satisfaction supports persistence (whether they will return without being reminded)
-- "A $10 billion TAM means nothing if the product invites the head in too early"
-
-ENTERPRISE VALUE INSIGHT:
-"Products do not create behavior. They align with it. Capital can extend momentum, but it cannot change structure. Enterprise value compounds where the elbow finishes before the head arrives."
-"""
-
-
-def normalize_brand_name(name: str) -> str:
-    """Normalize brand name for better AI recognition."""
-    if not name:
-        return name
-    
-    # Common variations mapping
-    variations = {
-        "dr bombay": "Dr. Bombay",
-        "drbombay": "Dr. Bombay", 
-        "dr.bombay": "Dr. Bombay",
-        "doctor bombay": "Dr. Bombay",
-        "mymochi": "My/Mochi",
-        "my mochi": "My/Mochi",
-        "cocacola": "Coca-Cola",
-        "coca cola": "Coca-Cola",
-        "coke": "Coca-Cola",
-        "pepsicola": "Pepsi",
-        "pepsi cola": "Pepsi",
-        "lays": "Lay's",
-        "lay's": "Lay's",
-        "haagen dazs": "Häagen-Dazs",
-        "haagendazs": "Häagen-Dazs",
-        "haagen-dazs": "Häagen-Dazs",
-        "ben and jerrys": "Ben & Jerry's",
-        "ben & jerry's": "Ben & Jerry's",
-        "ben jerrys": "Ben & Jerry's",
-    }
-    
-    normalized = name.strip().lower()
-    if normalized in variations:
-        return variations[normalized]
-    
-    # Title case if not in variations
-    return name.strip()
-
-
-def analyze_brand_with_ai(brand_name: str) -> Optional[dict]:
-    """
-    Use Gemini to analyze a brand using the complete Elbow Interference Theory™.
-    Returns dict with archetype, description, and BRAND-SPECIFIC scores.
-    """
-    model = get_gemini_model()
-    if not model or not brand_name:
-        return None
-    
-    # Normalize the brand name
-    normalized_name = normalize_brand_name(brand_name)
-    
-    prompt = f"""{WHITE_PAPER_CONTEXT}
-
-=== YOUR TASK ===
-
-Analyze this CPG GROCERY brand using the Elbow Interference Theory: "{normalized_name}"
-
-NOTE: The user entered "{brand_name}" - recognize common spelling variations:
-- "dr bombay", "Dr. Bombay", "Dr Bombay" = Snoop Dogg's ice cream brand
-- "mymochi", "My/Mochi", "my mochi" = the mochi ice cream brand
-- Treat typos and variations as the intended brand
-
-This applies to ANY orally consumed CPG grocery item - anything you eat or drink:
-- Snacks (chips, crackers, cookies, bars, nuts, popcorn, jerky)
-- Frozen (ice cream, novelties, pizza, meals, appetizers)
-- Dairy (yogurt, cheese, milk, butter, cream)
-- Beverages (soda, water, juice, coffee, tea, energy drinks, alcohol, kombucha)
-- Confectionery (candy, chocolate, gum, mints)
-- Bakery (bread, pastries, muffins, cakes)
-- Deli/Prepared (sandwiches, salads, ready meals)
-- Breakfast (cereal, oatmeal, pancake mix, syrup)
-- Condiments (sauces, dressings, spreads)
-- Baby food, supplements, protein powders - anything consumed orally
-
-FOCUS ON F (Familiarity) and C (Cognitive) - these are BRAND-SPECIFIC:
-
-F (Familiarity) - "How established is this brand in the consumer's mind?"
-
-CRITICAL EXAMPLES FROM THE WHITE PAPER:
-- **Serendipity** = F=5 (iconic NYC brand since 1954, decades of cultural presence, restaurant institution)
-- **Dr. Bombay** = F=3 (launched 2023, celebrity-driven, consumers don't have RITUAL with it yet)
-- **Häagen-Dazs** = F=5 (legacy premium brand, decades of presence)
-- **My/Mochi** = F=3 (novel format, growing but not yet ritual)
-
-General guidance:
-- F=5: Iconic legacy brands - household names for DECADES (Coca-Cola, Oreo, Lay's, Serendipity, Ben & Jerry's)
-- F=4: Well-known established brands (Kind, Chobani, Talenti)
-- F=3: Growing/emerging brands OR celebrity launches (Poppi, Dr. Bombay, Feastables)
-- F=2: New market entrants, niche brands
-- F=1: Unknown/brand new launches
-
-C (Cognitive) - "Does this brand make consumers THINK before buying?"
-
-CRITICAL EXAMPLES FROM THE WHITE PAPER:
-- **Serendipity** = C=3 (familiar legacy, some premium consideration but mostly autopilot)
-- **Dr. Bombay** = C=5 (celebrity noise FORCES evaluation - "is this worth it because of Snoop?")
-- **Coca-Cola** = C=1 (pure autopilot, decades of habit)
-- **Häagen-Dazs** = C=3 (premium but familiar)
-
-THE CELEBRITY TRAP: Celebrity brands get C=4-5 because:
-> "Celebrity branding invites the Head Zone to audit the purchase"
-> The consumer evaluates the CELEBRITY, not just the food
-
-General guidance:
-- C=1-2: Autopilot purchases - grab without thinking (Coke, Oreo, legacy brands)
-- C=3: Some consideration - premium positioning (Häagen-Dazs, Serendipity)
-- C=4-5: High cognitive load - CELEBRITY BRANDS, unfamiliar concepts (Dr. Bombay, Feastables)
-
-CELEBRITY BRANDS ARE SPECIAL:
-- Celebrity association INCREASES cognitive load (C=4-5) because consumers evaluate the celebrity, not just the food
-- Celebrity does NOT increase familiarity (F) - the celebrity is familiar, but the PRODUCT is new
-- Examples: Dr. Bombay (Snoop Dogg), Feastables (MrBeast), Prime (Logan Paul) = F=2-3, C=4-5
-
-ALSO PROVIDE M AND E (but these matter less - focus on F and C):
-- M (Mouthfeel): Quality of sensory experience (1-5)
-- E (Emotion): Satisfaction/indulgence delivered (1-5)
-
-For B and K, estimate based on typical format (user will override with their format selection):
-
-UNITIZED formats (B=1, K=1) - The package ends the occasion:
-- Single-serve packs, bars, sticks, individual portions
-- Single cans/bottles of beverages
-- Individually wrapped items
-- Single-serve cups, pouches, squeeze tubes
-
-BULK formats (B=4, K=3) - Consumer decides when to stop:
-- Bags, pouches (chips, crackers, cookies, candy)
-- Tubs, pints, containers (ice cream, yogurt, dips)
-- Boxes, cartons (cereal, crackers, snack mixes)
-- Multi-use jars/bottles (peanut butter, sauces, condiments)
-- Anything where you reach in multiple times
-
-Return ONLY valid JSON:
-{{"archetype": "unitized|bulk|ritual", "description": "brief description", "M": 4, "E": 4, "F": 3, "B": 4, "K": 3, "C": 4, "reasoning": "Explain your F and C scores - what makes this brand familiar or unfamiliar? What creates cognitive load?"}}
-
-If you cannot identify the brand, return: {{"error": "unknown"}}"""
-
-    try:
-        print(f"\n{'='*60}")
-        print(f"🔍 ANALYZING BRAND: {brand_name} (normalized: {normalized_name})")
-        print(f"{'='*60}")
-        
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        
-        print(f"\n📥 RAW AI RESPONSE:")
-        print(f"{text}")
-        print(f"\n{'='*60}")
-        
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0]
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0]
-        
-        result = json.loads(text.strip())
-        
-        print(f"\n✅ PARSED SCORES FOR {brand_name}:")
-        print(f"   M (Mouthfeel)  = {result.get('M')}")
-        print(f"   E (Emotion)    = {result.get('E')}")
-        print(f"   F (Familiarity)= {result.get('F')} ⭐")
-        print(f"   B (Bites)      = {result.get('B')}")
-        print(f"   K (Kinetic)    = {result.get('K')}")
-        print(f"   C (Cognitive)  = {result.get('C')} ⭐")
-        print(f"   Reasoning: {result.get('reasoning', 'none')[:100]}...")
-        print(f"{'='*60}\n")
-        
-        return result
-    except Exception as e:
-        print(f"\n❌ AI ANALYSIS ERROR for {brand_name}: {e}")
-        print(f"{'='*60}\n")
-        return None
-
-def generate_strategic_synthesis(brand1_name: str, brand2_name: str, 
-                                  s1: float, s2: float,
-                                  scores1: dict, scores2: dict,
-                                  rationale1: str, rationale2: str) -> str:
-    """
-    Use Gemini to generate an institutional-grade investment memo.
-    Produces comprehensive analysis like the Suu Tri-Biotics example.
-    """
-    print(f"[SYNTHESIS] Getting Gemini model...")
-    model = get_gemini_model()
-    if not model:
-        print(f"[SYNTHESIS] ✗ Model is None!")
-        return None
-    print(f"[SYNTHESIS] ✓ Model acquired")
-    
-    num1 = scores1.get('M',1) * scores1.get('E',1) * scores1.get('F',1)
-    den1 = scores1.get('B',1) * scores1.get('K',1) * scores1.get('C',1)
-    num2 = scores2.get('M',1) * scores2.get('E',1) * scores2.get('F',1)
-    den2 = scores2.get('B',1) * scores2.get('K',1) * scores2.get('C',1)
-    
-    # Determine which brand is the structural winner
-    winner = brand1_name if s1 > s2 else brand2_name
-    loser = brand2_name if s1 > s2 else brand1_name
-    winner_score = max(s1, s2)
-    loser_score = min(s1, s2)
-    winner_scores = scores1 if s1 > s2 else scores2
-    loser_scores = scores2 if s1 > s2 else scores1
-    ratio = winner_score / loser_score if loser_score > 0 else float('inf')
-    
-    # Identify critical weaknesses (scores >= 4 in denominator)
-    b1_warnings = []
-    if scores1.get('B', 1) >= 4: b1_warnings.append(f"B={scores1.get('B')} (high decision count)")
-    if scores1.get('K', 1) >= 4: b1_warnings.append(f"K={scores1.get('K')} (high effort)")
-    if scores1.get('C', 1) >= 4: b1_warnings.append(f"C={scores1.get('C')} (head arrives early)")
-    
-    b2_warnings = []
-    if scores2.get('B', 1) >= 4: b2_warnings.append(f"B={scores2.get('B')} (high decision count)")
-    if scores2.get('K', 1) >= 4: b2_warnings.append(f"K={scores2.get('K')} (high effort)")
-    if scores2.get('C', 1) >= 4: b2_warnings.append(f"C={scores2.get('C')} (head arrives early)")
-    
-    prompt = f"""{WHITE_PAPER_CONTEXT}
-
-=== YOUR TASK ===
-
-Generate a COMPREHENSIVE ELBOW INTERFERENCE ANALYSIS for Matt Leeds at Forward Consumer Partners.
-
-This should be institutional-grade analysis that breaks down EACH brand individually, similar to how an analyst would deconstruct a brand like Suu Tri-Biotics against the framework.
-
-=== BRAND DATA ===
-
-**{brand1_name}**
-- S-Score™: {s1:.2f}
-- M={scores1.get('M',0)}, E={scores1.get('E',0)}, F={scores1.get('F',0)} (Numerator: {num1})
-- B={scores1.get('B',0)}, K={scores1.get('K',0)}, C={scores1.get('C',0)} (Denominator: {den1})
-- Format/Archetype: {scores1.get('archetype', 'unknown')}
-{f"- ⚠️ Critical Weaknesses: {', '.join(b1_warnings)}" if b1_warnings else "- ✅ No critical denominator weaknesses"}
-{f"- Analyst Note: {rationale1}" if rationale1 else ""}
-
-**{brand2_name}**
-- S-Score™: {s2:.2f}
-- M={scores2.get('M',0)}, E={scores2.get('E',0)}, F={scores2.get('F',0)} (Numerator: {num2})
-- B={scores2.get('B',0)}, K={scores2.get('K',0)}, C={scores2.get('C',0)} (Denominator: {den2})
-- Format/Archetype: {scores2.get('archetype', 'unknown')}
-{f"- ⚠️ Critical Weaknesses: {', '.join(b2_warnings)}" if b2_warnings else "- ✅ No critical denominator weaknesses"}
-{f"- Analyst Note: {rationale2}" if rationale2 else ""}
-
-**Structural Winner: {winner}** with {ratio:.2f}x behavioral advantage
-
-=== OUTPUT FORMAT (FOLLOW THIS EXACTLY) ===
-
----
-
-# ELBOW INTERFERENCE ANALYSIS: {brand1_name} vs {brand2_name}
-
-## Product Structure Overview
-
-Create a brief table comparing the two brands:
-| Dimension | {brand1_name} | {brand2_name} |
-|-----------|--------------|---------------|
-| Format | ? | ? |
-| Category | ? | ? |
-| Consumption | ? | ? |
-
----
-
-## {brand1_name}: DETAILED ANALYSIS
-
-### Value Delivered (Numerator)
-
-**M (Mouthfeel): {scores1.get('M',0)}/5**
-- Explain what this score means for THIS specific brand
-- Is it category-defining or merely acceptable?
-
-**E (Emotion): {scores1.get('E',0)}/5**
-- What emotional payoff does this brand provide?
-- Is it immediate pleasure or delayed gratification?
-
-**F (Familiarity): {scores1.get('F',0)}/5** {"⭐" if scores1.get('F',0) >= 4 else "⚠️" if scores1.get('F',0) <= 2 else ""}
-- Is this anchored to existing ritual or requiring new behavior?
-- Legacy vs new entrant assessment
-
-### Cost Extracted (Denominator)
-
-**B (Bites/Decisions): {scores1.get('B',0)}/5** {"⚠️ HIGH FRICTION" if scores1.get('B',0) >= 4 else ""}
-- How many decisions before occasion ends?
-- Does occasion end automatically or require self-management?
-
-**K (Kinetic Effort): {scores1.get('K',0)}/5** {"⚠️ HIGH FRICTION" if scores1.get('K',0) >= 4 else ""}
-- Physical effort to continue consuming
-- Format-driven assessment
-
-**C (Cognitive Interference): {scores1.get('C',0)}/5** {"⚠️ CRITICAL WEAKNESS" if scores1.get('C',0) >= 4 else ""}
-- When does the head arrive?
-- Celebrity noise? Premium justification? Conceptual hooks?
-
----
-
-## {brand2_name}: DETAILED ANALYSIS
-
-(Same structure as above for the second brand)
-
----
-
-## The Core Problem: Head vs Elbow
-
-Using the White Paper framework, identify the critical structural difference between these brands. Quote the relevant passage:
-
-> "Consumption begins in the elbow. The elbow is the body acting without deliberation..."
-
-For the LOWER scoring brand ({loser}), explain:
-- Does it pass the "automatic consumption" test?
-- At what point does the head arrive?
-- Is the brand hook Conceptual (requires thinking) or Embodied (resolved in the body)?
-
----
-
-## Comparative Scorecard
-
-| Dimension | {brand1_name} | {brand2_name} | Advantage |
-|-----------|--------------|---------------|-----------|
-| Ritual Preservation | Yes/No | Yes/No | ? |
-| Elbow Entry | How? | How? | ? |
-| Cognitive Load | Low/Med/High | Low/Med/High | ? |
-| Head Arrival | When? | When? | ? |
-| Repeat Mechanism | How? | How? | ? |
-
-Key Quote: *"Products do not compete on taste alone. They compete on how long they delay the head."*
-
----
-
-## Why This Matters for Enterprise Value
-
-The White Paper states: *"TAM is the size of the door. Elbow Interference tells you whether consumers walk through it once or every week."*
-
-For {loser} (S-Score: {loser_score:.2f}):
-- High interference = velocity must be purchased, not compounded
-- Repeat depends on ______, not automatic behavior
-- Marketing must continuously reactivate
-- Churn risk assessment
-
-For {winner} (S-Score: {winner_score:.2f}):
-- Lower interference = repeat compounds naturally
-- Behavioral advantage creates moat
-
-Compare to benchmark acquisitions (Poppi at $1.95B captured low-friction soda moment).
-
----
-
-## Where {loser} Could Improve (Through EIT Lens)
-
-Provide 3-5 specific, actionable recommendations using the framework:
-1. How to lower B (decisions)?
-2. How to lower K (effort)?
-3. How to lower C (cognitive friction)?
-4. How to increase F (familiarity)?
-5. What format change would collapse the denominator?
-
----
-
-## Final Assessment
-
-Using the framework's language:
-
-> "Repeat behavior is not created by marketing. It is allowed or blocked by product structure."
-
-**{winner}**: [Structural Compounder / Low-Friction Asset]
-- Why repeat is structurally enabled
-
-**{loser}**: [High-Interference Asset / Growth Trap / Purchased Velocity]
-- Why repeat requires continued investment
-
-**Investment Verdict:**
-- Clear recommendation for Matt Leeds
-- S-Score ratio ({ratio:.2f}x) interpretation
-- What would change the calculus?
-
----
-
-Write in institutional investment tone. Be specific to these brands. Use actual scores throughout. Include White Paper quotes where impactful."""
-
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"Memo generation error: {e}")
-        return None
-
-
-def generate_rule_based_memo(brand1: str, brand2: str, s1: float, s2: float, 
-                              scores1: dict, scores2: dict) -> str:
-    """
-    Generate a comprehensive rule-based analysis memo without AI.
-    Uses the White Paper logic directly - styled like the Suu Tri-Biotics example.
-    """
-    winner = brand1 if s1 > s2 else brand2
-    loser = brand2 if s1 > s2 else brand1
-    winner_score = max(s1, s2)
-    loser_score = min(s1, s2)
-    winner_scores = scores1 if s1 > s2 else scores2
-    loser_scores = scores2 if s1 > s2 else scores1
-    ratio = winner_score / loser_score if loser_score > 0 else float('inf')
-    
-    num1 = scores1['M'] * scores1['E'] * scores1['F']
-    den1 = scores1['B'] * scores1['K'] * scores1['C']
-    num2 = scores2['M'] * scores2['E'] * scores2['F']
-    den2 = scores2['B'] * scores2['K'] * scores2['C']
-    
-    # Determine key differentiators
-    f_diff = scores1['F'] - scores2['F']
-    c_diff = scores2['C'] - scores1['C']
-    
-    # Warning flags
-    def get_warnings(scores, name):
-        warnings = []
-        if scores['B'] >= 4: warnings.append(f"B={scores['B']} ⚠️ HIGH (many decisions)")
-        if scores['K'] >= 4: warnings.append(f"K={scores['K']} ⚠️ HIGH (effort required)")
-        if scores['C'] >= 4: warnings.append(f"C={scores['C']} ⚠️ CRITICAL (head arrives early)")
-        return warnings
-    
-    b1_warnings = get_warnings(scores1, brand1)
-    b2_warnings = get_warnings(scores2, brand2)
-    
-    # Build comprehensive memo
-    memo = f"""# ELBOW INTERFERENCE ANALYSIS: {brand1} vs {brand2}
-
----
-
-## Executive Summary
-
-**{winner}** holds a **{ratio:.1f}x structural advantage** over {loser} in behavioral persistence.
-
-Using the Satisfaction Equation: **S = (M × E × F) ÷ (B × K × C)**
-
-| Brand | S-Score™ | Numerator | Denominator |
-|-------|----------|-----------|-------------|
-| {brand1} | **{s1:.2f}** | {num1} | {den1} |
-| {brand2} | **{s2:.2f}** | {num2} | {den2} |
-
----
-
-## {brand1}: Detailed Analysis
-
-### Value Delivered (Numerator = {num1})
-
-**M (Mouthfeel): {scores1['M']}/5**
-- Sensory experience during consumption
-- {"Strong sensory delivery" if scores1['M'] >= 4 else "Moderate sensory experience" if scores1['M'] >= 3 else "Limited mouthfeel impact"}
-
-**E (Emotion): {scores1['E']}/5**
-- Emotional satisfaction during occasion
-- {"High emotional payoff - immediate pleasure" if scores1['E'] >= 4 else "Moderate emotional connection" if scores1['E'] >= 3 else "Low emotional engagement"}
-
-**F (Familiarity): {scores1['F']}/5** {"⭐ STRENGTH" if scores1['F'] >= 4 else "⚠️ RISK" if scores1['F'] <= 2 else ""}
-- {"Anchored to established ritual - autopilot purchasing" if scores1['F'] >= 4 else "Some brand recognition" if scores1['F'] >= 3 else "Requires building new behavior - unfamiliar to consumers"}
-
-### Cost Extracted (Denominator = {den1})
-
-**B (Bites/Decisions): {scores1['B']}/5** {"⚠️ HIGH FRICTION" if scores1['B'] >= 4 else ""}
-- {"Many decisions before occasion ends - requires self-management" if scores1['B'] >= 4 else "Moderate decision count" if scores1['B'] >= 2 else "Occasion ends automatically - minimal decisions"}
-
-**K (Kinetic Effort): {scores1['K']}/5** {"⚠️ HIGH FRICTION" if scores1['K'] >= 4 else ""}
-- {"Significant physical effort required" if scores1['K'] >= 4 else "Moderate effort" if scores1['K'] >= 2 else "Minimal effort - grab and consume"}
-
-**C (Cognitive Interference): {scores1['C']}/5** {"⚠️ CRITICAL WEAKNESS" if scores1['C'] >= 4 else ""}
-- {"Head arrives before elbow finishes - consumer must think/evaluate" if scores1['C'] >= 4 else "Some cognitive processing required" if scores1['C'] >= 3 else "Autopilot consumption - elbow runs uninterrupted"}
-
-{f"**Denominator Warnings:** {', '.join(b1_warnings)}" if b1_warnings else "✅ **No critical denominator weaknesses**"}
-
----
-
-## {brand2}: Detailed Analysis
-
-### Value Delivered (Numerator = {num2})
-
-**M (Mouthfeel): {scores2['M']}/5**
-- Sensory experience during consumption
-- {"Strong sensory delivery" if scores2['M'] >= 4 else "Moderate sensory experience" if scores2['M'] >= 3 else "Limited mouthfeel impact"}
-
-**E (Emotion): {scores2['E']}/5**
-- Emotional satisfaction during occasion
-- {"High emotional payoff - immediate pleasure" if scores2['E'] >= 4 else "Moderate emotional connection" if scores2['E'] >= 3 else "Low emotional engagement"}
-
-**F (Familiarity): {scores2['F']}/5** {"⭐ STRENGTH" if scores2['F'] >= 4 else "⚠️ RISK" if scores2['F'] <= 2 else ""}
-- {"Anchored to established ritual - autopilot purchasing" if scores2['F'] >= 4 else "Some brand recognition" if scores2['F'] >= 3 else "Requires building new behavior - unfamiliar to consumers"}
-
-### Cost Extracted (Denominator = {den2})
-
-**B (Bites/Decisions): {scores2['B']}/5** {"⚠️ HIGH FRICTION" if scores2['B'] >= 4 else ""}
-- {"Many decisions before occasion ends - requires self-management" if scores2['B'] >= 4 else "Moderate decision count" if scores2['B'] >= 2 else "Occasion ends automatically - minimal decisions"}
-
-**K (Kinetic Effort): {scores2['K']}/5** {"⚠️ HIGH FRICTION" if scores2['K'] >= 4 else ""}
-- {"Significant physical effort required" if scores2['K'] >= 4 else "Moderate effort" if scores2['K'] >= 2 else "Minimal effort - grab and consume"}
-
-**C (Cognitive Interference): {scores2['C']}/5** {"⚠️ CRITICAL WEAKNESS" if scores2['C'] >= 4 else ""}
-- {"Head arrives before elbow finishes - consumer must think/evaluate" if scores2['C'] >= 4 else "Some cognitive processing required" if scores2['C'] >= 3 else "Autopilot consumption - elbow runs uninterrupted"}
-
-{f"**Denominator Warnings:** {', '.join(b2_warnings)}" if b2_warnings else "✅ **No critical denominator weaknesses**"}
-
----
-
-## The Core Problem: Head vs Elbow
-
-> *"Consumption begins in the elbow. The elbow is the body acting without deliberation. Reaching, opening, tasting. The head is not involved."*
-
-"""
-    
-    # Determine which brand has the head problem
-    if loser_scores['C'] >= 4:
-        memo += f"""**{loser} invites the Head immediately.**
-
-With C={loser_scores['C']}, the consumer must THINK before/during consumption. This creates:
-- Continuous self-interrogation ("Is this worth it?")
-- Decision fatigue on repeat purchase
-- Vulnerability to competitive switching
-
-The White Paper is clear: *"The moment the head arrives, the elbow slows."*
-"""
-    elif max(loser_scores['B'], loser_scores['K']) >= 4:
-        memo += f"""**{loser} creates friction through effort.**
-
-With B={loser_scores['B']} and K={loser_scores['K']}, the physical structure of consumption creates repeated decision points. Each decision is an opportunity for the head to arrive.
-"""
-    else:
-        memo += f"""Both brands have manageable interference profiles. The difference lies primarily in the numerator (value delivered) rather than denominator (cost extracted).
-"""
-    
-    # Comparative table
-    memo += f"""
-
----
-
-## Comparative Scorecard
-
-| Dimension | {brand1} | {brand2} |
-|-----------|----------|----------|
-| Elbow Entry | {"Easy - minimal prep" if scores1['K'] <= 2 else "Moderate" if scores1['K'] <= 3 else "Requires effort"} | {"Easy - minimal prep" if scores2['K'] <= 2 else "Moderate" if scores2['K'] <= 3 else "Requires effort"} |
-| Cognitive Load | {"Low" if scores1['C'] <= 2 else "Medium" if scores1['C'] <= 3 else "High"} | {"Low" if scores2['C'] <= 2 else "Medium" if scores2['C'] <= 3 else "High"} |
-| Head Arrival | {"Delayed" if scores1['C'] <= 2 else "Mid-occasion" if scores1['C'] <= 3 else "Early/Immediate"} | {"Delayed" if scores2['C'] <= 2 else "Mid-occasion" if scores2['C'] <= 3 else "Early/Immediate"} |
-| Repeat Mechanism | {"Habitual" if den1 <= 6 else "Requires effort"} | {"Habitual" if den2 <= 6 else "Requires effort"} |
-
----
-
-## Why This Matters for Enterprise Value
-
-> *"TAM is the size of the door. Elbow Interference tells you whether consumers walk through it once or every week."*
-
-"""
-    
-    # Add specific enterprise value analysis
-    if loser_score < 2:
-        memo += f"""**{loser}** (S-Score: {loser_score:.2f}):
-- High interference = velocity must be **purchased**, not compounded
-- Repeat depends on consumer **discipline**, not automatic behavior
-- Marketing must continuously **reactivate** ("Have you bought yours lately?")
-- **Churn risk** when consumers forget, get busy, or encounter friction
-
-**{winner}** (S-Score: {winner_score:.2f}):
-- Lower interference = repeat **compounds naturally**
-- Behavioral advantage creates **structural moat**
-- Marketing drives **trial**; structure handles **repeat**
-"""
-    else:
-        memo += f"""Both brands show viable persistence profiles, but **{winner}** has the structural edge.
-
-- {winner}: Velocity earned through repeat structure
-- {loser}: Requires more marketing support for same repeat rate
-"""
-    
-    # Recommendations for the weaker brand
-    memo += f"""
-
----
-
-## Where {loser} Could Improve (Through EIT Lens)
-
-"""
-    if loser_scores['C'] >= 4:
-        memo += f"""1. **Lower Cognitive Friction**: Simplify the value proposition. Stop requiring consumers to think.
-2. **Reduce Conceptual Hooks**: If brand relies on celebrity, trend, or complex benefits, find ways to make value embodied (felt immediately) rather than conceptual (requires explanation).
-"""
-    if loser_scores['B'] >= 4:
-        memo += f"""3. **Reduce Decisions**: Consider portion-controlled or single-serve formats that end the occasion automatically.
-"""
-    if loser_scores['K'] >= 3:
-        memo += f"""4. **Lower Kinetic Effort**: Ready-to-consume formats beat "some assembly required."
-"""
-    if loser_scores['F'] <= 2:
-        memo += f"""5. **Build Familiarity**: Anchor to existing rituals rather than creating new behaviors.
-"""
-    
-    # Final assessment
-    memo += f"""
-
----
-
-## Final Assessment
-
-> *"Repeat behavior is not created by marketing. It is allowed or blocked by product structure."*
-
-**{winner}**: {"Structural Compounder" if winner_score >= 5 else "Low-Friction Asset" if winner_score >= 2 else "Moderate Persistence"}
-- {"Denominator collapse achieved - repeat is automatic" if winner_scores['B'] * winner_scores['K'] * winner_scores['C'] <= 6 else "Manageable friction profile"}
-- Velocity {"compounds naturally" if winner_score >= 3 else "supported by structure"}
-
-**{loser}**: {"High-Interference Asset" if loser_score < 1.5 else "Purchased Velocity Risk" if loser_score < 2.5 else "Moderate Persistence"}
-- {"Heavy denominator blocks habitual repeat" if loser_scores['B'] * loser_scores['K'] * loser_scores['C'] >= 24 else "Some structural friction"}
-- {"Velocity must be purchased through continuous marketing" if loser_score < 2 else "Requires some marketing support"}
-
-**Investment Verdict:**
-
-{winner} wins this duel with a **{ratio:.1f}x structural advantage**. 
-
-{"This is a decisive gap - the structural difference is significant enough to impact long-term enterprise value." if ratio >= 2 else "This is a meaningful gap that compounds over time through repeat purchase behavior." if ratio >= 1.5 else "The gap is modest - competitive positioning and execution will matter as much as structure."}
-
----
-
-*Analysis generated using the Elbow Interference Theory™ by Russell Barnett*
-"""
-    
-    return memo
+from ai_services import (
+    get_gemini_model,
+    analyze_brand_with_ai,
+    generate_strategic_synthesis,
+    generate_rule_based_memo,
+    GEMINI_AVAILABLE,
+)
+from brands import (
+    Archetype,
+    ARCHETYPES,
+    BRAND_DATABASE,
+    KNOWN_BRANDS,
+    normalize_brand_name,
+    hunt_brand,
+)
+from scoring import calculate_s_score, validate_rationale
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -795,294 +67,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ═══════════════════════════════════════════════════════════════════════════════════════
-# PRODUCT FORMATS (Archetypes)
-# ═══════════════════════════════════════════════════════════════════════════════════════
-#
-# The PHYSICAL FORMAT of a product determines how much "interference" occurs during
-# consumption. The format sets baseline scores for the Satisfaction Equation.
-#
-# KEY INSIGHT: The Denominator (B × K × C) measures FRICTION.
-#   - B (Bites) = How many decisions before you're done?
-#   - K (Kinetic) = How much physical effort to keep eating?
-#   - C (Cognitive) = How much thinking required?
-#
-# LOW Denominator = Product "does the work" = Easy to finish = High repeat
-# HIGH Denominator = You must "manage yourself" = Hard to finish = Low repeat
-# ═══════════════════════════════════════════════════════════════════════════════════════
-
-@dataclass(frozen=True)
-class Archetype:
-    name: str           # Display name
-    short_name: str     # Simple label
-    examples: str       # Real product examples
-    description: str    # Plain English explanation
-    M: int              # Mouthfeel (1-5)
-    E: int              # Emotion (1-5)
-    F: int              # Familiarity (1-5)
-    B: int              # Bites/Decisions (1-5)
-    K: int              # Kinetic/Effort (1-5)
-    C: int              # Cognitive/Thinking (1-5)
-    why_denominator: str  # Why the denominator is set this way
-
-
-ARCHETYPES: Dict[str, Archetype] = {
-    "unitized": Archetype(
-        name="Single-Serve / Portion-Controlled",
-        short_name="Single-Serve",
-        examples="Mochi bites, protein bars, ice cream bars, snack packs",
-        description="The package decides when you're done. One portion = one occasion. No decisions needed.",
-        M=4, E=4, F=3, B=1, K=1, C=1,
-        why_denominator="B=1, K=1, C=1 because you eat the whole thing without deciding to stop. The format does the work."
-    ),
-    "bulk": Archetype(
-        name="Multi-Serve / Open Container",
-        short_name="Multi-Serve",
-        examples="Pints, tubs, chip bags, family-size containers",
-        description="YOU decide when to stop. Each bite is a new decision. More chances to quit early.",
-        M=5, E=4, F=4, B=4, K=3, C=3,
-        why_denominator="B=4, K=3, C=3 because you must self-regulate. Many bites = many chances for your brain to say 'stop'."
-    ),
-    "ritual": Archetype(
-        name="Ritual / Single-Occasion Beverage",
-        short_name="Ritual Drink",
-        examples="Soda cans, energy drinks, bottled beverages, sparkling water",
-        description="One can = one ritual. Highly familiar. You drink it without thinking.",
-        M=3, E=3, F=5, B=1, K=1, C=1,
-        why_denominator="B=1, K=1, C=1 because it's automatic. High familiarity (F=5) means zero cognitive friction."
-    ),
-}
-
-BRAND_DATABASE: Dict[str, Tuple[str, str]] = {
-    # Unitized brands (with common variations)
-    "my/mochi": ("unitized", "Premium frozen mochi"), 
-    "mymochi": ("unitized", "Premium frozen mochi"),
-    "my mochi": ("unitized", "Premium frozen mochi"),
-    "mochi": ("unitized", "Premium frozen mochi"),
-    "kind": ("unitized", "Nutrition bars"), 
-    "kind bar": ("unitized", "Nutrition bars"),
-    "rxbar": ("unitized", "Protein bars"),
-    "rx bar": ("unitized", "Protein bars"),
-    "quest": ("unitized", "Protein snacks"), 
-    "yasso": ("unitized", "Frozen yogurt bars"),
-    "magnum": ("unitized", "Ice cream bars"), 
-    "doughlicious": ("unitized", "Cookie dough bites"),
-    "doughliscious": ("unitized", "Cookie dough bites"),  # Common misspelling
-    
-    # Bulk brands (with common variations)
-    "ben & jerry's": ("bulk", "Premium pints"), 
-    "ben and jerry's": ("bulk", "Premium pints"),
-    "ben and jerrys": ("bulk", "Premium pints"),
-    "ben jerry": ("bulk", "Premium pints"),
-    "häagen-dazs": ("bulk", "Premium pints"),
-    "haagen-dazs": ("bulk", "Premium pints"),
-    "haagen dazs": ("bulk", "Premium pints"),
-    "hagendaz": ("bulk", "Premium pints"),
-    "haagendazs": ("bulk", "Premium pints"),
-    "talenti": ("bulk", "Gelato pints"),
-    "dr. bombay": ("bulk", "Celebrity pints"), 
-    "dr bombay": ("bulk", "Celebrity pints"),
-    "doctor bombay": ("bulk", "Celebrity pints"),
-    "drbombay": ("bulk", "Celebrity pints"),
-    "serendipity": ("bulk", "Premium pints"),
-    "jeni's": ("bulk", "Artisan pints"), 
-    "jenis": ("bulk", "Artisan pints"),
-    "lay's": ("bulk", "Multi-serve chips"),
-    "lays": ("bulk", "Multi-serve chips"),
-    "doritos": ("bulk", "Multi-serve chips"),
-    "cheetos": ("bulk", "Multi-serve snacks"),
-    
-    # Ritual brands (with common variations)
-    "poppi": ("ritual", "Prebiotic soda"), 
-    "poppie": ("ritual", "Prebiotic soda"),
-    "olipop": ("ritual", "Functional soda"),
-    "oli pop": ("ritual", "Functional soda"),
-    "liquid death": ("ritual", "Canned water"), 
-    "liquiddeath": ("ritual", "Canned water"),
-    "celsius": ("ritual", "Energy drinks"),
-    "red bull": ("ritual", "Energy drinks"),
-    "redbull": ("ritual", "Energy drinks"),
-    "coca-cola": ("ritual", "Carbonated beverages"),
-    "coca cola": ("ritual", "Carbonated beverages"),
-    "coke": ("ritual", "Carbonated beverages"),
-    "pepsi": ("ritual", "Carbonated beverages"),
-    "monster": ("ritual", "Energy drinks"),
-}
-
-# Single source of truth for known brand scores (M,E,F,B,K,C) and reasoning. Used by Brand 1 and Brand 2.
-KNOWN_BRANDS = {
-    'serendipity': {'M': 4, 'E': 4, 'F': 5, 'B': 4, 'K': 3, 'C': 3,
-                    'reasoning': 'Serendipity: NYC legacy brand since 1954. High Familiarity (F=5) from decades of brand building. Standard pint format drives B/K. Low cognitive friction (C=3) - no justification needed for a known indulgence.'},
-    'dr. bombay': {'M': 4, 'E': 4, 'F': 3, 'B': 4, 'K': 3, 'C': 5,
-                   'reasoning': 'Dr. Bombay: Celebrity brand (Snoop Dogg). Low Familiarity (F=3) - new entrant without legacy. HIGH Cognitive (C=5) - celebrity branding invites consumer to evaluate/justify purchase. The "head" arrives before consumption.'},
-    'dr bombay': {'M': 4, 'E': 4, 'F': 3, 'B': 4, 'K': 3, 'C': 5,
-                  'reasoning': 'Dr. Bombay: Celebrity brand (Snoop Dogg). Low Familiarity (F=3) - new entrant without legacy. HIGH Cognitive (C=5) - celebrity branding invites consumer to evaluate/justify purchase.'},
-    'häagen-dazs': {'M': 5, 'E': 5, 'F': 5, 'B': 4, 'K': 3, 'C': 2,
-                    'reasoning': 'Häagen-Dazs: Ultra-legacy premium brand. Maximum Familiarity (F=5). Premium positioning but so established that C is low - consumers know what they are getting.'},
-    'haagen-dazs': {'M': 5, 'E': 5, 'F': 5, 'B': 4, 'K': 3, 'C': 2,
-                    'reasoning': 'Häagen-Dazs: Ultra-legacy premium brand.'},
-    'ben & jerry\'s': {'M': 5, 'E': 5, 'F': 5, 'B': 4, 'K': 3, 'C': 2,
-                       'reasoning': 'Ben & Jerry\'s: Iconic legacy brand with decades of equity.'},
-    'my/mochi': {'M': 4, 'E': 4, 'F': 4, 'B': 1, 'K': 1, 'C': 1,
-                 'reasoning': 'My/Mochi: Unitized format = Denominator Collapse. B=1, K=1, C=1 because occasion ends automatically.'},
-    'mymochi': {'M': 4, 'E': 4, 'F': 4, 'B': 1, 'K': 1, 'C': 1,
-                'reasoning': 'My/Mochi: Unitized format = Denominator Collapse.'},
-    'coca-cola': {'M': 4, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-                  'reasoning': 'Coca-Cola: Maximum legacy (F=5). Ritual format (can) = Denominator Collapse.'},
-    'coke': {'M': 4, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-             'reasoning': 'Coca-Cola: Maximum legacy.'},
-    'pepsi': {'M': 4, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-              'reasoning': 'Pepsi: Maximum legacy (F=5). Ritual format.'},
-    'oreo': {'M': 4, 'E': 4, 'F': 5, 'B': 2, 'K': 1, 'C': 1,
-             'reasoning': 'Oreo: Iconic snack brand. Maximum Familiarity.'},
-    'poppi': {'M': 3, 'E': 3, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-              'reasoning': 'Poppi: Growing familiarity. Ritual preservation (soda format). Some cognitive for "better-for-you" positioning.'},
-    'lays': {'M': 4, 'E': 4, 'F': 5, 'B': 5, 'K': 2, 'C': 1,
-             'reasoning': 'Lay\'s: Maximum legacy. Bulk format = high B (decisions). Low C (autopilot snacking).'},
-    'popchips': {'M': 3, 'E': 3, 'F': 3, 'B': 5, 'K': 2, 'C': 3,
-                 'reasoning': 'Popchips: Moderate familiarity. "Better" positioning adds cognitive friction.'},
-    'clif bar': {'M': 3, 'E': 3, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-                 'reasoning': 'Clif Bar: Established energy bar brand (F=4). Unitized format = B=1, K=1. Some health consideration (C=2).'},
-    'clif': {'M': 3, 'E': 3, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-             'reasoning': 'Clif Bar: Established energy bar brand.'},
-    'kind bar': {'M': 4, 'E': 3, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-                 'reasoning': 'KIND: Well-established healthy snack (F=4). Unitized bar format.'},
-    'kind': {'M': 4, 'E': 3, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-             'reasoning': 'KIND: Well-established healthy snack.'},
-    'rxbar': {'M': 3, 'E': 3, 'F': 3, 'B': 1, 'K': 1, 'C': 3,
-              'reasoning': 'RXBAR: Growing brand, transparency messaging adds cognitive load.'},
-    'joy days': {'M': 4, 'E': 4, 'F': 2, 'B': 1, 'K': 1, 'C': 3,
-                 'reasoning': 'Joy Days: Newer frozen novelty brand (F=2). Unitized format. Some premium/health consideration.'},
-    'joydays': {'M': 4, 'E': 4, 'F': 2, 'B': 1, 'K': 1, 'C': 3,
-                'reasoning': 'Joy Days: Newer frozen novelty brand.'},
-    'magnum': {'M': 5, 'E': 5, 'F': 4, 'B': 1, 'K': 1, 'C': 2,
-               'reasoning': 'Magnum: Premium ice cream bar, established global brand (F=4). Unitized format.'},
-    'mars': {'M': 4, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-             'reasoning': 'Mars: Iconic legacy brand (F=5). Autopilot purchase (C=1).'},
-    'snickers': {'M': 5, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-                 'reasoning': 'Snickers: Maximum legacy (F=5). Autopilot purchase.'},
-    'twix': {'M': 4, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-             'reasoning': 'Twix: Iconic candy bar. Maximum legacy.'},
-    'talenti': {'M': 5, 'E': 5, 'F': 4, 'B': 4, 'K': 3, 'C': 2,
-                'reasoning': 'Talenti: Premium gelato, well-known (F=4). Pint format = bulk denominator.'},
-    'halo top': {'M': 3, 'E': 3, 'F': 3, 'B': 4, 'K': 3, 'C': 3,
-                 'reasoning': 'Halo Top: Growing "better-for-you" ice cream. Cognitive for health positioning.'},
-    'red bull': {'M': 3, 'E': 4, 'F': 5, 'B': 1, 'K': 1, 'C': 1,
-                 'reasoning': 'Red Bull: Maximum legacy energy drink. Ritual can format.'},
-    'monster': {'M': 3, 'E': 4, 'F': 4, 'B': 1, 'K': 1, 'C': 1,
-                'reasoning': 'Monster: Established energy drink brand.'},
-    'prime': {'M': 3, 'E': 3, 'F': 3, 'B': 1, 'K': 1, 'C': 4,
-              'reasoning': 'Prime: Celebrity brand (Logan Paul/KSI). F=3 (new), C=4 (celebrity cognitive load).'},
-    'feastables': {'M': 4, 'E': 4, 'F': 2, 'B': 2, 'K': 1, 'C': 5,
-                   'reasoning': 'Feastables: MrBeast celebrity chocolate. Low F (new), High C (celebrity evaluation).'},
-    'liquid death': {'M': 2, 'E': 3, 'F': 3, 'B': 1, 'K': 1, 'C': 3,
-                     'reasoning': 'Liquid Death: Growing brand with edgy marketing. Some cognitive for branding novelty.'},
-    'celsius': {'M': 3, 'E': 4, 'F': 3, 'B': 1, 'K': 1, 'C': 2,
-                'reasoning': 'Celsius: Growing fitness energy drink brand.'},
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════════════
-# FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════════════
-
-def levenshtein_distance(s1: str, s2: str) -> int:
-    """Calculate edit distance between two strings."""
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
-    if len(s2) == 0:
-        return len(s1)
-    
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-    
-    return previous_row[-1]
-
-
-def similarity_score(s1: str, s2: str) -> float:
-    """Calculate similarity between two strings (0-1, higher is better)."""
-    distance = levenshtein_distance(s1.lower(), s2.lower())
-    max_len = max(len(s1), len(s2))
-    if max_len == 0:
-        return 1.0
-    return 1 - (distance / max_len)
-
-
-def find_similar_brands(query: str, threshold: float = 0.6) -> list:
-    """Find brands similar to the query."""
-    if not query:
-        return []
-    
-    normalized = query.lower().strip()
-    matches = []
-    
-    for brand_key in BRAND_DATABASE.keys():
-        # Check exact/substring match first
-        if brand_key in normalized or normalized in brand_key:
-            return [(brand_key, 1.0)]  # Perfect match
-        
-        # Calculate similarity
-        score = similarity_score(normalized, brand_key)
-        
-        # Also check without punctuation/spaces
-        clean_query = ''.join(c for c in normalized if c.isalnum())
-        clean_brand = ''.join(c for c in brand_key if c.isalnum())
-        score2 = similarity_score(clean_query, clean_brand)
-        
-        best_score = max(score, score2)
-        
-        if best_score >= threshold:
-            matches.append((brand_key, best_score))
-    
-    # Sort by similarity score (highest first)
-    matches.sort(key=lambda x: x[1], reverse=True)
-    return matches[:3]  # Return top 3 matches
-
-
-def hunt_brand(brand_name: str) -> Tuple[Optional[str], Optional[str], bool, list]:
-    """
-    Hunt for brand in database with fuzzy matching.
-    Returns: (archetype, description, is_ambiguous, similar_brands)
-    """
-    if not brand_name:
-        return None, None, False, []
-    
-    normalized = brand_name.lower().strip()
-    
-    # Exact or substring match
-    for brand_key, (archetype, desc) in BRAND_DATABASE.items():
-        if brand_key in normalized or normalized in brand_key:
-            return archetype, desc, False, []
-    
-    # Fuzzy matching
-    similar = find_similar_brands(normalized)
-    
-    if similar:
-        # If top match is very close (>0.8), auto-suggest correction
-        if similar[0][1] >= 0.8:
-            best_match = similar[0][0]
-            archetype, desc = BRAND_DATABASE[best_match]
-            return archetype, desc, False, similar
-        else:
-            # Return suggestions but no auto-match
-            return None, None, False, similar
-    
-    return None, None, False, []
-
-def calculate_s_score(m: int, e: int, f: int, b: int, k: int, c: int) -> float:
-    return (m * e * f) / max(1, b * k * c)
-
-def validate_rationale(text: str) -> bool:
-    if not text:
-        return False
-    return sum(1 for c in text.strip() if c.isalnum()) >= 25
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # MASSIVE FONT THEME
@@ -1625,6 +609,159 @@ if "ups_pw_26_b2" not in st.session_state: st.session_state.ups_pw_26_b2 = None
 if "adjustments_log_b1" not in st.session_state: st.session_state.adjustments_log_b1 = []
 if "adjustments_log_b2" not in st.session_state: st.session_state.adjustments_log_b2 = []
 
+
+def _infer_advanced_from_dataframe(df: pd.DataFrame) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Infer sidebar Advanced values (promo frequency/depth, velocity) from uploaded CSV/Excel.
+    Returns (updates_dict, messages) where updates_dict has keys like promo_frequency_b1 (0-1),
+    and messages are short strings for the UI.
+    """
+    updates = {}
+    messages = []
+    if df is None or df.empty:
+        return updates, messages
+    cols_lower = {str(c).lower(): c for c in df.columns}
+    # Promo frequency: % weeks on deal, 0-1 scale (or 0-100 → /100). Broad patterns for varied docs.
+    for pattern in ["promo freq", "promo frequency", "deal frequency", "weeks on deal", "% weeks", "promo_weeks", "deal_weeks", "tpr freq", "feature rate", "promo rate", "deal rate", "freq", "frequency", "weeks deal", "deal %", "promo %", "feature", "tpr"]:
+        for key, col in cols_lower.items():
+            if pattern in key:
+                try:
+                    s = pd.to_numeric(df[col].dropna(), errors="coerce")
+                    s = s[s.notna()]
+                    if len(s) == 0:
+                        break
+                    v = float(s.mean())
+                    if v > 1:
+                        v = v / 100.0
+                    v = max(0.0, min(1.0, v))
+                    updates["promo_frequency_b1"] = v
+                    updates["promo_frequency_b2"] = v
+                    messages.append(f"Promo Frequency (B1 & B2): {v:.0%} from column «{col}»")
+                except Exception:
+                    pass
+                break
+        if "promo_frequency_b1" in updates:
+            break
+    # Promo depth: % off, 0-1 scale. Broad patterns for varied docs.
+    for pattern in ["promo depth", "deal depth", "% off", "discount", "avg discount", "average discount", "depth", "tpr depth", "off shelf", "discount depth", "off", "disc", "reduction", "lift", "deal off"]:
+        for key, col in cols_lower.items():
+            if pattern in key:
+                try:
+                    s = pd.to_numeric(df[col].dropna(), errors="coerce")
+                    s = s[s.notna()]
+                    if len(s) == 0:
+                        break
+                    v = float(s.mean())
+                    if v > 1:
+                        v = v / 100.0
+                    v = max(0.0, min(1.0, v))
+                    updates["promo_depth_b1"] = v
+                    updates["promo_depth_b2"] = v
+                    messages.append(f"Promo Depth (B1 & B2): {v:.0%} from column «{col}»")
+                except Exception:
+                    pass
+                break
+        if "promo_depth_b1" in updates:
+            break
+    # Velocity 13w / 26w: one column each for 13-week and 26-week (apply to both B1 and B2)
+    for pattern_13 in ["13", "13wk", "13 wk", "latest", "current"]:
+        for pattern_u in ["ups", "units", "velocity", "sales", "volume"]:
+            for key, col in cols_lower.items():
+                if pattern_13 in key and pattern_u in key:
+                    try:
+                        s = pd.to_numeric(df[col].dropna(), errors="coerce").dropna()
+                        if len(s) > 0:
+                            v = float(s.mean())
+                            if v > 0:
+                                updates["ups_pw_13_b1"] = v
+                                updates["ups_pw_13_b2"] = v
+                                messages.append(f"Velocity 13w (B1 & B2): {v:.1f} from «{col}»")
+                                break
+                    except Exception:
+                        pass
+            if "ups_pw_13_b1" in updates:
+                break
+        if "ups_pw_13_b1" in updates:
+            break
+    for pattern_26 in ["26", "26wk", "26 wk", "prior", "base", "52"]:
+        for pattern_u in ["ups", "units", "velocity", "sales", "volume"]:
+            for key, col in cols_lower.items():
+                if pattern_26 in key and pattern_u in key:
+                    try:
+                        s = pd.to_numeric(df[col].dropna(), errors="coerce").dropna()
+                        if len(s) > 0:
+                            v = float(s.mean())
+                            if v > 0:
+                                updates["ups_pw_26_b1"] = v
+                                updates["ups_pw_26_b2"] = v
+                                messages.append(f"Velocity 26w (B1 & B2): {v:.1f} from «{col}»")
+                                break
+                    except Exception:
+                        pass
+            if "ups_pw_26_b1" in updates:
+                break
+        if "ups_pw_26_b1" in updates:
+            break
+    return updates, messages
+
+
+def _value_from_column(df: pd.DataFrame, col_name: str, kind: str) -> Optional[float]:
+    """Compute a single value from a dataframe column for Advanced fields. kind: 'promo_freq'|'promo_depth'|'velocity'."""
+    if df is None or df.empty or not col_name or col_name not in df.columns:
+        return None
+    try:
+        s = pd.to_numeric(df[col_name].dropna(), errors="coerce").dropna()
+        if len(s) == 0:
+            return None
+        v = float(s.mean())
+        if kind == "promo_freq" or kind == "promo_depth":
+            if v > 1:
+                v = v / 100.0
+            return max(0.0, min(1.0, v))
+        return v if v > 0 else None
+    except Exception:
+        return None
+
+
+def _build_upload_context_for_report() -> str:
+    """
+    Build full context from any uploaded file (sales data or brand/consumer documents)
+    for the final Investor Memo so the report explicitly uses this material.
+    """
+    parts = []
+    _fname = st.session_state.get("_last_uploaded_file_name", "")
+    _df = st.session_state.get("uploaded_data")
+    _txt = st.session_state.get("uploaded_text")
+    if not _fname and _df is None and not _txt:
+        return ""
+    if _fname:
+        parts.append(f"Uploaded file: {_fname}")
+    # Sales/tabular data: include structure and sample rows so the report can reference real numbers
+    if _df is not None and hasattr(_df, "shape") and not _df.empty:
+        parts.append(f"Sales/tabular data: {_df.shape[0]} rows × {_df.shape[1]} columns.")
+        parts.append(f"Columns: {list(_df.columns)}")
+        try:
+            sample = _df.head(20)
+            if len(_df.columns) > 15:
+                sample = sample.iloc[:, :15]
+            parts.append("Sample rows (use these figures where relevant in the report):")
+            parts.append(sample.to_string(max_colwidth=35))
+        except Exception:
+            # Fallback: avoid huge to_dict() for wide dataframes; use shape + column names only
+            parts.append(f"Sample omitted (table shape {_df.shape[0]}×{_df.shape[1]}; columns listed above).")
+    # Documents (brand/consumer): include substantial extracted text so the report can cite context
+    if _txt and isinstance(_txt, str) and _txt.strip():
+        cap = 7000
+        excerpt = _txt.strip()[:cap] + ("..." if len(_txt) > cap else "")
+        parts.append("Document content (brand/consumer context — use in the report where relevant):")
+        parts.append("---")
+        parts.append(excerpt)
+        parts.append("---")
+    if not parts:
+        return ""
+    return "\n\n".join(parts)
+
+
 # Check if Gemini is configured
 _test_model = get_gemini_model()
 AI_ENABLED = _test_model is not None
@@ -1646,7 +783,7 @@ with st.sidebar:
     st.divider()
     
     # RESTART
-    if st.button("🔄 Restart Analysis", use_container_width=True):
+    if st.button("🔄 Restart Analysis", width="stretch"):
         st.session_state.ai_scores_b1 = None
         st.session_state.ai_scores_b2 = None
         st.session_state.last_brand1 = ""
@@ -1667,6 +804,17 @@ with st.sidebar:
     )
     
     if uploaded_file:
+        # On new file upload: restart analysis (clear AI cache + memo) but keep user overrides (final_b1, final_b2)
+        _prev_name = st.session_state.get('_last_uploaded_file_name', '')
+        if _prev_name != uploaded_file.name:
+            st.session_state.ai_scores_b1 = None
+            st.session_state.ai_scores_b2 = None
+            st.session_state.last_brand1 = ""
+            st.session_state.last_brand2 = ""
+            st.session_state.last_memo = None
+            st.session_state['_last_uploaded_file_name'] = uploaded_file.name
+            # Do NOT clear final_b1 / final_b2 so overrides are preserved
+
         file_ext = uploaded_file.name.split('.')[-1].lower()
         file_size_mb = uploaded_file.size / (1024 * 1024)
         
@@ -1681,13 +829,19 @@ with st.sidebar:
                     st.session_state['uploaded_data'] = df
                     st.session_state['uploaded_text'] = None
                     st.session_state['file_loaded'] = True
+                    # Auto-fill Advanced (sidebar) from detected promo/velocity columns
+                    adv_updates, adv_messages = _infer_advanced_from_dataframe(df)
+                    for k, v in adv_updates.items():
+                        setattr(st.session_state, k, v)
                 st.success(f"✅ **CSV loaded:** {len(df)} rows × {len(df.columns)} columns")
+                if adv_messages:
+                    st.caption("📌 **Advanced (auto-filled):** " + " | ".join(adv_messages))
                 
                 # Show column preview
                 with st.expander("📋 Data Preview"):
                     try:
-                        st.dataframe(df.head(10), use_container_width=True)
-                    except:
+                        st.dataframe(df.head(10), width="stretch")
+                    except Exception:
                         st.table(df.head(10))
                 
                 # Time series detection for CSV
@@ -1713,15 +867,21 @@ with st.sidebar:
                     st.session_state['uploaded_data'] = df
                     st.session_state['uploaded_text'] = None
                     st.session_state['file_loaded'] = True
+                    # Auto-fill Advanced (sidebar) from detected promo/velocity columns
+                    adv_updates, adv_messages = _infer_advanced_from_dataframe(df)
+                    for k, v in adv_updates.items():
+                        setattr(st.session_state, k, v)
                     
                 st.success(f"✅ **Excel loaded:** {len(df)} rows × {len(df.columns)} columns")
                 st.caption(f"Columns: {', '.join(df.columns[:5].tolist())}{'...' if len(df.columns) > 5 else ''}")
+                if adv_messages:
+                    st.caption("📌 **Advanced (auto-filled):** " + " | ".join(adv_messages))
                 
                 # Show column preview with cleaned data
                 with st.expander("📋 Data Preview (first 10 rows)"):
                     try:
-                        st.dataframe(df_clean.head(10), use_container_width=True)
-                    except:
+                        st.dataframe(df_clean.head(10), width="stretch")
+                    except Exception:
                         st.table(df.head(10))
                 
                 # Time series detection for Excel
@@ -1807,6 +967,42 @@ with st.sidebar:
             with st.expander("🔧 Error Details"):
                 st.code(traceback.format_exc())
     
+    # When we have tabular data, let user map any column to Advanced (works with any column names)
+    _ud = st.session_state.get("uploaded_data")
+    if _ud is not None and hasattr(_ud, "columns") and isinstance(_ud, pd.DataFrame):
+        df_map = _ud
+        col_options = ["— Don't map —"] + [str(c) for c in df_map.columns]
+        with st.expander("🗺️ Map columns to Advanced", expanded=True):
+            st.caption("Choose which column in your file is used for each Advanced field. Values are averaged and applied to both brands.")
+            c_freq = st.selectbox("Promo Frequency (B1 & B2)", col_options, key="adv_map_promo_freq")
+            if c_freq != "— Don't map —":
+                val = _value_from_column(df_map, c_freq, "promo_freq")
+                if val is not None:
+                    st.session_state.promo_frequency_b1 = val
+                    st.session_state.promo_frequency_b2 = val
+                    st.caption(f"✓ Set to **{val:.0%}** (mean of «{c_freq}»)")
+            c_depth = st.selectbox("Promo Depth (B1 & B2)", col_options, key="adv_map_promo_depth")
+            if c_depth != "— Don't map —":
+                val = _value_from_column(df_map, c_depth, "promo_depth")
+                if val is not None:
+                    st.session_state.promo_depth_b1 = val
+                    st.session_state.promo_depth_b2 = val
+                    st.caption(f"✓ Set to **{val:.0%}** (mean of «{c_depth}»)")
+            c_13 = st.selectbox("Velocity 13w (B1 & B2)", col_options, key="adv_map_13w")
+            if c_13 != "— Don't map —":
+                val = _value_from_column(df_map, c_13, "velocity")
+                if val is not None:
+                    st.session_state.ups_pw_13_b1 = val
+                    st.session_state.ups_pw_13_b2 = val
+                    st.caption(f"✓ Set to **{val:.1f}** (mean of «{c_13}»)")
+            c_26 = st.selectbox("Velocity 26w (B1 & B2)", col_options, key="adv_map_26w")
+            if c_26 != "— Don't map —":
+                val = _value_from_column(df_map, c_26, "velocity")
+                if val is not None:
+                    st.session_state.ups_pw_26_b1 = val
+                    st.session_state.ups_pw_26_b2 = val
+                    st.caption(f"✓ Set to **{val:.1f}** (mean of «{c_26}»)")
+    
     st.divider()
     
     # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1826,17 +1022,22 @@ with st.sidebar:
         if st.session_state.use_priors and PRIORS_AVAILABLE:
             st.caption("Context affects scoring adjustments:")
             
+            _cohort_opts = ["younger", "mixed", "older"]
+            _cohort_val = getattr(st.session_state, "cohort", "mixed") or "mixed"
+            _cohort_idx = _cohort_opts.index(_cohort_val) if _cohort_val in _cohort_opts else 1
             st.session_state.cohort = st.selectbox(
                 "Target Cohort",
-                options=["younger", "mixed", "older"],
-                index=["younger", "mixed", "older"].index(st.session_state.cohort),
+                options=_cohort_opts,
+                index=_cohort_idx,
                 help=tip("cohort")
             )
-            
+            _occ_opts = ["evening", "late_night", "daytime", "on_the_go"]
+            _occ_val = getattr(st.session_state, "occasion", "evening") or "evening"
+            _occ_idx = _occ_opts.index(_occ_val) if _occ_val in _occ_opts else 0
             st.session_state.occasion = st.selectbox(
                 "Primary Occasion",
-                options=["evening", "late_night", "daytime", "on_the_go"],
-                index=["evening", "late_night", "daytime", "on_the_go"].index(st.session_state.occasion),
+                options=_occ_opts,
+                index=_occ_idx,
                 help=tip("priors_occasion")
             )
             
@@ -1941,7 +1142,6 @@ with st.expander("📖 How Scoring Works (Elbow Interference Theory™)", expand
     """)
 
 # Default category when not set in session (used for priors context)
-DEFAULT_CATEGORY = "ice_cream"
 CATEGORY_OPTIONS = ["ice_cream", "chips", "candy", "soda", "energy", "yogurt", "bars", "other"]
 
 # Format options - covers ALL orally consumed CPG
@@ -2030,14 +1230,17 @@ with h1:
             st.warning(f"⚠️ **{brand1_name}** — set scores manually below")
         
         ai1 = st.session_state.ai_scores_b1
-        
-        # Store original AI scores for comparison
-        orig_M1 = ai1.get('M', 4) if ai1 else 4
-        orig_E1 = ai1.get('E', 4) if ai1 else 4
-        orig_F1 = ai1.get('F', 3) if ai1 else 3
-        orig_B1 = ai1.get('B', arch1.B) if ai1 else arch1.B
-        orig_K1 = ai1.get('K', arch1.K) if ai1 else arch1.K
-        orig_C1 = ai1.get('C', 3) if ai1 else 3
+        # Prefer saved overrides (final_b1) so upload restarts analysis but keeps your edits
+        _fb1 = st.session_state.get('final_b1') or {}
+        def _orig_b1(key: str, default):
+            v = _fb1.get(key) if (_fb1 and key in _fb1) else (ai1.get(key, default) if ai1 else default)
+            return max(1, min(5, int(round(v)))) if v is not None else default
+        orig_M1 = _orig_b1('M', 4)
+        orig_E1 = _orig_b1('E', 4)
+        orig_F1 = _orig_b1('F', 3)
+        orig_B1 = _orig_b1('B', arch1.B)
+        orig_K1 = _orig_b1('K', arch1.K)
+        orig_C1 = _orig_b1('C', 3)
         
         # === ALL 6 SCORE CONTROLS ===
         st.markdown("**ALL 6 METRICS** (adjust as needed)")
@@ -2073,32 +1276,32 @@ with h1:
         if b1_manual_M != orig_M1:
             st.warning(f"⚠️ **M Override**: {orig_M1}→{b1_manual_M}")
             b1_justifications['M'] = st.text_input(f"Why M={b1_manual_M}?", key="b1_just_M", placeholder="Explain Mouthfeel change...", help=tip("override_rationale"))
-            if len(b1_justifications['M'].strip()) < 10: b1_missing_justifications.append('M')
+            if len((b1_justifications.get('M') or '').strip()) < 10: b1_missing_justifications.append('M')
         
         if b1_manual_E != orig_E1:
             st.warning(f"⚠️ **E Override**: {orig_E1}→{b1_manual_E}")
             b1_justifications['E'] = st.text_input(f"Why E={b1_manual_E}?", key="b1_just_E", placeholder="Explain Emotion change...", help=tip("override_rationale"))
-            if len(b1_justifications['E'].strip()) < 10: b1_missing_justifications.append('E')
+            if len((b1_justifications.get('E') or '').strip()) < 10: b1_missing_justifications.append('E')
         
         if b1_manual_F != orig_F1:
             st.warning(f"⚠️ **F Override**: {orig_F1}→{b1_manual_F}")
             b1_justifications['F'] = st.text_input(f"Why F={b1_manual_F}?", key="b1_just_F", placeholder="Explain Familiarity change...", help=tip("override_rationale"))
-            if len(b1_justifications['F'].strip()) < 10: b1_missing_justifications.append('F')
+            if len((b1_justifications.get('F') or '').strip()) < 10: b1_missing_justifications.append('F')
         
         if b1_manual_B != orig_B1:
             st.warning(f"⚠️ **B Override**: {orig_B1}→{b1_manual_B}")
             b1_justifications['B'] = st.text_input(f"Why B={b1_manual_B}?", key="b1_just_B", placeholder="Explain Bites change...", help=tip("override_rationale"))
-            if len(b1_justifications['B'].strip()) < 10: b1_missing_justifications.append('B')
+            if len((b1_justifications.get('B') or '').strip()) < 10: b1_missing_justifications.append('B')
         
         if b1_manual_K != orig_K1:
             st.warning(f"⚠️ **K Override**: {orig_K1}→{b1_manual_K}")
             b1_justifications['K'] = st.text_input(f"Why K={b1_manual_K}?", key="b1_just_K", placeholder="Explain Kinetic change...", help=tip("override_rationale"))
-            if len(b1_justifications['K'].strip()) < 10: b1_missing_justifications.append('K')
+            if len((b1_justifications.get('K') or '').strip()) < 10: b1_missing_justifications.append('K')
         
         if b1_manual_C != orig_C1:
             st.warning(f"⚠️ **C Override**: {orig_C1}→{b1_manual_C}")
             b1_justifications['C'] = st.text_input(f"Why C={b1_manual_C}?", key="b1_just_C", placeholder="Explain Cognitive change...", help=tip("override_rationale"))
-            if len(b1_justifications['C'].strip()) < 10: b1_missing_justifications.append('C')
+            if len((b1_justifications.get('C') or '').strip()) < 10: b1_missing_justifications.append('C')
         
         if b1_missing_justifications:
             st.error(f"❌ Justify: {', '.join(b1_missing_justifications)} (min 10 chars each)")
@@ -2176,15 +1379,17 @@ with h2:
             st.warning(f"⚠️ **{brand2_name}** — set scores manually below")
         
         ai2 = st.session_state.ai_scores_b2
-        
-        # === ALL 6 SCORE CONTROLS ===
-        # Store original AI scores for comparison
-        orig_M2 = ai2.get('M', 4) if ai2 else 4
-        orig_E2 = ai2.get('E', 4) if ai2 else 4
-        orig_F2 = ai2.get('F', 3) if ai2 else 3
-        orig_B2 = ai2.get('B', arch2.B) if ai2 else arch2.B
-        orig_K2 = ai2.get('K', arch2.K) if ai2 else arch2.K
-        orig_C2 = ai2.get('C', 3) if ai2 else 3
+        # Prefer saved overrides (final_b2) so upload restarts analysis but keeps your edits
+        _fb2 = st.session_state.get('final_b2') or {}
+        def _orig_b2(key: str, default):
+            v = _fb2.get(key) if (_fb2 and key in _fb2) else (ai2.get(key, default) if ai2 else default)
+            return max(1, min(5, int(round(v)))) if v is not None else default
+        orig_M2 = _orig_b2('M', 4)
+        orig_E2 = _orig_b2('E', 4)
+        orig_F2 = _orig_b2('F', 3)
+        orig_B2 = _orig_b2('B', arch2.B)
+        orig_K2 = _orig_b2('K', arch2.K)
+        orig_C2 = _orig_b2('C', 3)
         
         st.markdown("**ALL 6 METRICS** (adjust as needed)")
         
@@ -2219,32 +1424,32 @@ with h2:
         if b2_manual_M != orig_M2:
             st.warning(f"⚠️ **M Override**: {orig_M2}→{b2_manual_M}")
             b2_justifications['M'] = st.text_input(f"Why M={b2_manual_M}?", key="b2_just_M", placeholder="Explain Mouthfeel change...", help=tip("override_rationale"))
-            if len(b2_justifications['M'].strip()) < 10: b2_missing_justifications.append('M')
+            if len((b2_justifications.get('M') or '').strip()) < 10: b2_missing_justifications.append('M')
         
         if b2_manual_E != orig_E2:
             st.warning(f"⚠️ **E Override**: {orig_E2}→{b2_manual_E}")
             b2_justifications['E'] = st.text_input(f"Why E={b2_manual_E}?", key="b2_just_E", placeholder="Explain Emotion change...", help=tip("override_rationale"))
-            if len(b2_justifications['E'].strip()) < 10: b2_missing_justifications.append('E')
+            if len((b2_justifications.get('E') or '').strip()) < 10: b2_missing_justifications.append('E')
         
         if b2_manual_F != orig_F2:
             st.warning(f"⚠️ **F Override**: {orig_F2}→{b2_manual_F}")
             b2_justifications['F'] = st.text_input(f"Why F={b2_manual_F}?", key="b2_just_F", placeholder="Explain Familiarity change...", help=tip("override_rationale"))
-            if len(b2_justifications['F'].strip()) < 10: b2_missing_justifications.append('F')
+            if len((b2_justifications.get('F') or '').strip()) < 10: b2_missing_justifications.append('F')
         
         if b2_manual_B != orig_B2:
             st.warning(f"⚠️ **B Override**: {orig_B2}→{b2_manual_B}")
             b2_justifications['B'] = st.text_input(f"Why B={b2_manual_B}?", key="b2_just_B", placeholder="Explain Bites change...", help=tip("override_rationale"))
-            if len(b2_justifications['B'].strip()) < 10: b2_missing_justifications.append('B')
+            if len((b2_justifications.get('B') or '').strip()) < 10: b2_missing_justifications.append('B')
         
         if b2_manual_K != orig_K2:
             st.warning(f"⚠️ **K Override**: {orig_K2}→{b2_manual_K}")
             b2_justifications['K'] = st.text_input(f"Why K={b2_manual_K}?", key="b2_just_K", placeholder="Explain Kinetic change...", help=tip("override_rationale"))
-            if len(b2_justifications['K'].strip()) < 10: b2_missing_justifications.append('K')
+            if len((b2_justifications.get('K') or '').strip()) < 10: b2_missing_justifications.append('K')
         
         if b2_manual_C != orig_C2:
             st.warning(f"⚠️ **C Override**: {orig_C2}→{b2_manual_C}")
             b2_justifications['C'] = st.text_input(f"Why C={b2_manual_C}?", key="b2_just_C", placeholder="Explain Cognitive change...", help=tip("override_rationale"))
-            if len(b2_justifications['C'].strip()) < 10: b2_missing_justifications.append('C')
+            if len((b2_justifications.get('C') or '').strip()) < 10: b2_missing_justifications.append('C')
         
         if b2_missing_justifications:
             st.error(f"❌ Justify: {', '.join(b2_missing_justifications)} (min 10 chars each)")
@@ -2362,12 +1567,12 @@ else:
 print(f"[DEBUG] Final B1 scores (after priors): M={b1_m}, E={b1_e}, F={b1_f}, B={b1_b}, K={b1_k}, C={b1_c}")
 print(f"[DEBUG] Final B2 scores (after priors): M={b2_m}, E={b2_e}, F={b2_f}, B={b2_b}, K={b2_k}, C={b2_c}")
 
-# Calculate S-Scores - check for locked state from overrides
+# Calculate S-Scores when both brands are entered (show comparison even if overrides are locked)
 b1_locked = st.session_state.get('b1_locked', False)
 b2_locked = st.session_state.get('b2_locked', False)
 
-s1 = calculate_s_score(b1_m, b1_e, b1_f, b1_b, b1_k, b1_c) if (brand1_name and not b1_locked) else None
-s2 = calculate_s_score(b2_m, b2_e, b2_f, b2_b, b2_k, b2_c) if (brand2_name and not b2_locked) else None
+s1 = calculate_s_score(b1_m, b1_e, b1_f, b1_b, b1_k, b1_c) if brand1_name else None
+s2 = calculate_s_score(b2_m, b2_e, b2_f, b2_b, b2_k, b2_c) if brand2_name else None
 
 print(f"[DEBUG] S1={s1}, S2={s2}")
 
@@ -2444,6 +1649,10 @@ b1_amendments = bool(rat_b1)
 b2_amendments = bool(rat_b2)
 
 
+# When both brands are entered, show comparison and reports (scroll down if needed)
+if brand1_name and brand2_name and (s1 is None or s2 is None):
+    st.info("💡 **Tip:** Scroll up to fill in or adjust the 6 metrics (M, E, F, B, K, C) for each brand. S-Scores and reports appear below once both brands have scores.")
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # BEHAVIORAL SIGNATURE - USING NATIVE STREAMLIT
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -2461,8 +1670,8 @@ if s1 is not None and s2 is not None:
         n1: [str(b1_m), str(b1_e), str(b1_f), str(b1_b), str(b1_k), str(b1_c), f"{s1:.2f}"],
         n2: [str(b2_m), str(b2_e), str(b2_f), str(b2_b), str(b2_k), str(b2_c), f"{s2:.2f}"],
         "Delta": [
-            f"{b2_m - b1_m:+d}", f"{b2_e - b1_e:+d}", f"{b2_f - b1_f:+d}",
-            f"{b2_b - b1_b:+d}", f"{b2_k - b1_k:+d}", f"{b2_c - b1_c:+d}",
+            f"{b2_m - b1_m:+.2f}", f"{b2_e - b1_e:+.2f}", f"{b2_f - b1_f:+.2f}",
+            f"{b2_b - b1_b:+.2f}", f"{b2_k - b1_k:+.2f}", f"{b2_c - b1_c:+.2f}",
             f"{s2 - s1:+.2f}"
         ]
     }
@@ -2487,7 +1696,7 @@ if s1 is not None and s2 is not None:
     st.bar_chart(
         chart_data.set_index("Variable"), 
         height=350, 
-        use_container_width=True,
+        width="stretch",
         color=["#10b981", "#ec4899"]  # Mint green and Pink for brands
     )
     
@@ -2566,19 +1775,23 @@ if s1 is not None and s2 is not None:
     scores1 = {'M': b1_m, 'E': b1_e, 'F': b1_f, 'B': b1_b, 'K': b1_k, 'C': b1_c}
     scores2 = {'M': b2_m, 'E': b2_e, 'F': b2_f, 'B': b2_b, 'K': b2_k, 'C': b2_c}
     
+    # Build full upload context for memo: sales data and/or brand/consumer documents (so report uses all of it)
+    _data_ctx = _build_upload_context_for_report()
+
     # Generate memo buttons
     col_ai, col_rule = st.columns(2)
     
     with col_ai:
         if AI_ENABLED:
-            if st.button("📊 Elbow Interference Investor Report", type="primary", use_container_width=True):
+            if st.button("📊 Elbow Interference Investor Report", type="primary", width="stretch"):
                 with st.spinner("Generating analysis... (10-15 seconds)"):
                     try:
                         print(f"[MEMO] Attempting AI generation for {n1} vs {n2}")
                         ai_thesis = generate_strategic_synthesis(
                             n1, n2, s1, s2, scores1, scores2,
                             rat_b1 if b1_amendments else "",
-                            rat_b2 if b2_amendments else ""
+                            rat_b2 if b2_amendments else "",
+                            data_context=_data_ctx
                         )
                         if ai_thesis:
                             st.session_state.last_memo = ai_thesis
@@ -2595,7 +1808,7 @@ if s1 is not None and s2 is not None:
             st.info("Use Quick Analysis")
     
     with col_rule:
-        if st.button("📋 Quick Analysis", use_container_width=True):
+        if st.button("📋 Quick Analysis", width="stretch"):
             st.session_state.last_memo = generate_rule_based_memo(n1, n2, s1, s2, scores1, scores2)
     
     # Display saved memo if exists
