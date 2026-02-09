@@ -14,7 +14,7 @@ except ImportError:
     genai = None
     GEMINI_AVAILABLE = False
 
-from config import WHITE_PAPER_CONTEXT
+from config import WHITE_PAPER_CONTEXT, ANALYST_PERSONA
 from brands import normalize_brand_name
 
 
@@ -48,6 +48,8 @@ def analyze_brand_with_ai(brand_name: str) -> Optional[dict]:
         return None
     normalized_name = normalize_brand_name(brand_name)
     prompt = f"""{WHITE_PAPER_CONTEXT}
+
+{ANALYST_PERSONA}
 
 === YOUR TASK ===
 
@@ -206,11 +208,13 @@ def generate_strategic_synthesis(
         b2_warnings.append(f"C={scores2.get('C')} (head arrives early)")
     prompt = f"""{WHITE_PAPER_CONTEXT}
 
+{ANALYST_PERSONA}
+
 === YOUR TASK ===
 
 Generate a COMPREHENSIVE ELBOW INTERFERENCE ANALYSIS for Matt Leeds at Forward Consumer Partners.
 
-This should be institutional-grade analysis that breaks down EACH brand individually, similar to how an analyst would deconstruct a brand like Suu Tri-Biotics against the framework.
+Write as a world-class analyst and market research strategist: institutional-grade analysis that breaks down EACH brand individually, with clear strategic implications and evidence-based conclusions.
 
 === BRAND DATA ===
 
@@ -234,7 +238,7 @@ This should be institutional-grade analysis that breaks down EACH brand individu
 {f'''
 
 === UPLOADED CONTEXT: SALES DATA AND/OR BRAND/CONSUMER DOCUMENTS ===
-The analyst has uploaded the following. You MUST take this into context when writing the final report.
+The following data/documents have been uploaded. You MUST take this into context when writing the final report. As a world-class analyst, use this material rigorously.
 - Cite specific figures, trends, or quotes from the sales data or document where they support your analysis.
 - Weave in brand or consumer insights from the document where relevant.
 - If the upload is sales/tabular data, reference column names and sample values where they inform the narrative.
@@ -372,7 +376,7 @@ Using the framework's language:
 
 ---
 
-Write in institutional investment tone. Be specific to these brands. Use actual scores throughout. Include White Paper quotes where impactful."""
+Write in institutional investment tone as a world-class market research strategist. Be specific to these brands. Use actual scores throughout. Include White Paper quotes where impactful. Every claim should be grounded in the data and framework."""
     try:
         response = model.generate_content(prompt)
         return response.text.strip()
@@ -593,6 +597,6 @@ With B={loser_scores['B']} and K={loser_scores['K']}, the physical structure of 
 
 ---
 
-*Analysis generated using the Elbow Interference Theory™ by Russell Barnett*
+*Analysis generated using the Elbow Interference Theory™ by Russell Barnett. Prepared with the rigor of a world-class market research strategist.*
 """
     return memo

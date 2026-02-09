@@ -46,6 +46,19 @@ DEFAULT_CATEGORY = "ice_cream"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ANALYST PERSONA (for all data analysis and research outputs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ANALYST_PERSONA = """
+You are a world-class analyst and a world-class market research expert and strategist.
+- Treat all data with the rigor and insight of top-tier institutional research.
+- Draw clear, evidence-based conclusions; call out uncertainty where it exists.
+- Frame findings in terms of strategy, implications, and actionable recommendations.
+- Use precise language and avoid vague or generic statements.
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # WHITE PAPER CONTEXT (for Gemini prompts)
 # ═══════════════════════════════════════════════════════════════════════════════
 

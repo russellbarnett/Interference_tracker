@@ -14,6 +14,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, List, Any
 import json
+import html
 
 from config import TOOLTIPS, tip, DEFAULT_CATEGORY
 
@@ -57,6 +58,18 @@ from brands import (
 )
 from scoring import calculate_s_score, validate_rationale
 
+# Fixed height for both Analysis panels (same in both columns)
+ANALYSIS_PANEL_HEIGHT_REM = 18
+
+def _analysis_panel_html(text: str) -> str:
+    """Wrap analysis text in a fixed-height scrollable div so both columns match."""
+    safe = html.escape(text or "—").replace("\n", "<br>")
+    return (
+        f'<div style="height: {ANALYSIS_PANEL_HEIGHT_REM}rem; min-height: {ANALYSIS_PANEL_HEIGHT_REM}rem; '
+        f'max-height: {ANALYSIS_PANEL_HEIGHT_REM}rem; overflow-y: auto; overflow-x: hidden; '
+        f'padding: 0.5rem 0; color: #E9D5FF; font-size: 1rem; line-height: 1.6;">{safe}</div>'
+    )
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -88,6 +101,14 @@ st.markdown("""
     }
     .main {
         background: transparent !important;
+        overflow: visible !important;
+    }
+    [data-testid="stAppViewContainer"] {
+        overflow: visible !important;
+    }
+    [data-testid="block-container"] {
+        overflow: visible !important;
+        max-width: 100% !important;
     }
     
     /* Watermark - very subtle */
@@ -110,13 +131,29 @@ st.markdown("""
     }
     
     /* ═══════════════════════════════════════════════════════════════════════════════ */
-    /* SIDEBAR - Dark with WHITE text                                                  */
+    /* SIDEBAR - Dark, readable width, text can wrap (no clipping)                     */
     /* ═══════════════════════════════════════════════════════════════════════════════ */
     
     section[data-testid="stSidebar"] { 
         background: rgba(15, 10, 35, 0.95) !important;
         border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
         backdrop-filter: blur(12px) !important;
+        min-width: 16rem !important;
+    }
+    section[data-testid="stSidebar"] > div:first-child {
+        min-width: 16rem !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        font-size: 1.25rem !important;
+        line-height: 1.4 !important;
+        color: #FFFFFF !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
     section[data-testid="stSidebar"] * {
         color: #FFFFFF !important;
@@ -188,9 +225,15 @@ st.markdown("""
     
     /* Captions - Pale Lavender (NOT muted gray) */
     small, .stCaption, [data-testid="stCaptionContainer"] { 
-        font-size: 1rem !important; 
+        font-size: 1.1rem !important; 
         font-weight: 500 !important; 
         color: #E9D5FF !important; 
+    }
+    
+    /* Tables - markdown and st.table: larger, readable text */
+    .main table, .main th, .main td,
+    div[data-testid="stTable"] table, div[data-testid="stTable"] th, div[data-testid="stTable"] td {
+        font-size: 1.25rem !important;
     }
     
     /* ═══════════════════════════════════════════════════════════════════════════════ */
@@ -217,6 +260,32 @@ st.markdown("""
         color: #E9D5FF !important;
     }
     .streamlit-expanderContent strong { color: #FFFFFF !important; }
+    
+    /* Analysis panels: both same fixed height (18rem); scroll when content is longer */
+    .main [data-testid="column"] [data-testid="stExpander"] .streamlit-expanderContent,
+    .main [data-testid="column"] [data-testid="stExpander"] div[class*="expanderContent"] {
+        height: 18rem !important;
+        min-height: 18rem !important;
+        max-height: 18rem !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-gutter: stable !important;
+        box-sizing: border-box !important;
+    }
+    .main [data-testid="column"] [data-testid="stExpander"] .streamlit-expanderContent::-webkit-scrollbar,
+    .main [data-testid="column"] [data-testid="stExpander"] div[class*="expanderContent"]::-webkit-scrollbar {
+        width: 8px !important;
+    }
+    .main [data-testid="column"] [data-testid="stExpander"] .streamlit-expanderContent::-webkit-scrollbar-track,
+    .main [data-testid="column"] [data-testid="stExpander"] div[class*="expanderContent"]::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3) !important;
+        border-radius: 4px !important;
+    }
+    .main [data-testid="column"] [data-testid="stExpander"] .streamlit-expanderContent::-webkit-scrollbar-thumb,
+    .main [data-testid="column"] [data-testid="stExpander"] div[class*="expanderContent"]::-webkit-scrollbar-thumb {
+        background: #10b981 !important;
+        border-radius: 4px !important;
+    }
     
     /* Metrics - Glass Card */
     div[data-testid="stMetric"] { 
@@ -967,42 +1036,8 @@ with st.sidebar:
             with st.expander("🔧 Error Details"):
                 st.code(traceback.format_exc())
     
-    # When we have tabular data, let user map any column to Advanced (works with any column names)
-    _ud = st.session_state.get("uploaded_data")
-    if _ud is not None and hasattr(_ud, "columns") and isinstance(_ud, pd.DataFrame):
-        df_map = _ud
-        col_options = ["— Don't map —"] + [str(c) for c in df_map.columns]
-        with st.expander("🗺️ Map columns to Advanced", expanded=True):
-            st.caption("Choose which column in your file is used for each Advanced field. Values are averaged and applied to both brands.")
-            c_freq = st.selectbox("Promo Frequency (B1 & B2)", col_options, key="adv_map_promo_freq")
-            if c_freq != "— Don't map —":
-                val = _value_from_column(df_map, c_freq, "promo_freq")
-                if val is not None:
-                    st.session_state.promo_frequency_b1 = val
-                    st.session_state.promo_frequency_b2 = val
-                    st.caption(f"✓ Set to **{val:.0%}** (mean of «{c_freq}»)")
-            c_depth = st.selectbox("Promo Depth (B1 & B2)", col_options, key="adv_map_promo_depth")
-            if c_depth != "— Don't map —":
-                val = _value_from_column(df_map, c_depth, "promo_depth")
-                if val is not None:
-                    st.session_state.promo_depth_b1 = val
-                    st.session_state.promo_depth_b2 = val
-                    st.caption(f"✓ Set to **{val:.0%}** (mean of «{c_depth}»)")
-            c_13 = st.selectbox("Velocity 13w (B1 & B2)", col_options, key="adv_map_13w")
-            if c_13 != "— Don't map —":
-                val = _value_from_column(df_map, c_13, "velocity")
-                if val is not None:
-                    st.session_state.ups_pw_13_b1 = val
-                    st.session_state.ups_pw_13_b2 = val
-                    st.caption(f"✓ Set to **{val:.1f}** (mean of «{c_13}»)")
-            c_26 = st.selectbox("Velocity 26w (B1 & B2)", col_options, key="adv_map_26w")
-            if c_26 != "— Don't map —":
-                val = _value_from_column(df_map, c_26, "velocity")
-                if val is not None:
-                    st.session_state.ups_pw_26_b1 = val
-                    st.session_state.ups_pw_26_b2 = val
-                    st.caption(f"✓ Set to **{val:.1f}** (mean of «{c_26}»)")
-    
+    # Tabular data: Advanced fields (promo frequency/depth, velocity) are auto-filled from column
+    # names when the file looks like it has that info (see CSV/Excel load above). No manual mapping.
     st.divider()
     
     # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1091,7 +1126,7 @@ with st.sidebar:
     <code style="color: #10b981 !important; font-size: 1.1rem; font-weight: 600;">S = (M×E×F) ÷ (B×K×C)</code>
 </div>
     """, unsafe_allow_html=True)
-    st.caption("Value Delivered ÷ Cost Extracted = Satisfaction")
+    st.caption("S = Satisfaction · Value Delivered ÷ Cost Extracted")
     
     st.divider()
     
@@ -1105,9 +1140,13 @@ st.markdown("# Elbow Interference Evaluator™")
 
 # Compact Equation Banner - Glassmorphism
 st.markdown("""
-<div style="background: rgba(91, 33, 182, 0.35); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); padding: 24px 40px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; margin: 16px 0 24px 0;">
+<div style="background: rgba(91, 33, 182, 0.35); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); padding: 24px 40px; border-radius: 16px; margin: 16px 0 8px 0;">
     <div style="font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 700; color: #10b981 !important;">S = (M × E × F) ÷ (B × K × C)</div>
-    <div style="font-size: 1rem; color: #c4b5fd !important; text-align: right;">S = Satisfaction (enables persistence)</div>
+    <div style="font-size: 1rem; color: #c4b5fd !important; margin-top: 8px;">S = Satisfaction · Value Delivered ÷ Cost Extracted</div>
+    <div style="font-size: 0.95rem; color: #E9D5FF !important; margin-top: 12px; line-height: 1.5;">
+        <strong>Numerator (value):</strong> M = Mouthfeel · E = Emotion · F = Familiarity &nbsp;|&nbsp;
+        <strong>Denominator (cost):</strong> B = Bites · K = Kinetic · C = Cognitive
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1117,25 +1156,41 @@ st.markdown("""
 
 st.markdown("## 🔍 Brand Discovery")
 
-# Educational context
-with st.expander("📖 How Scoring Works (Elbow Interference Theory™)", expanded=False):
+# Educational context - full formula and variable definitions
+with st.expander("📖 How Scoring Works (Elbow Interference Theory™)", expanded=True):
     st.markdown("""
-    **S = Satisfaction.** Value Delivered ÷ Cost Extracted = Satisfaction. Satisfaction enables persistence over time, but persistence is not the equation itself.
+    **The formula**
+
+    **S = (M × E × F) ÷ (B × K × C)**  
+    **S** = Satisfaction. Higher S means the brand is more likely to repeat; the equation is *Value Delivered ÷ Cost Extracted*.
+
+    **What each letter means (all scored 1–5):**
+
+    | Letter | Name | Meaning |
+    |--------|------|---------|
+    | **M** | Mouthfeel | Texture and physical experience while consuming. |
+    | **E** | Emotion | The payoff during consumption (comfort, indulgence, relief). |
+    | **F** | Familiarity | How established the brand is (habit, ritual, legacy). |
+    | **B** | Bites | How many stop/continue decisions before the occasion ends. |
+    | **K** | Kinetic | Physical effort to keep consuming (prep, tools, cleanup). |
+    | **C** | Cognitive | How much thinking or self-control the product triggers. |
+
+    **Numerator (M × E × F)** = value delivered. **Denominator (B × K × C)** = cost extracted. Products win by maximizing the numerator and minimizing the denominator.
 
     **The Key Insight:** Products don't win by maximizing pleasure—they win by minimizing friction.
-    
+
     **F (Familiarity)** — Does the consumer buy on autopilot?
     - **5** = Iconic legacy (Coke, Oreo, Lay's) — decades of habit
     - **3** = Growing brand or celebrity launch — still building ritual
     - **1** = Unknown/new — requires discovery
-    
+
     **C (Cognitive)** — Does the brand make consumers THINK?
     - **1-2** = Autopilot purchase — grab without thinking
     - **3** = Some consideration — premium or health-adjacent
     - **4-5** = High cognitive load — celebrity brands, complex value props
-    
+
     **Celebrity brands = Low F + High C** (the celebrity is familiar, but the PRODUCT is new and requires evaluation)
-    
+
     **Format determines B and K:**
     - **Single-serve** = B=1, K=1 (package ends the occasion)
     - **Multi-serve** = B=4, K=3 (you decide when to stop)
@@ -1208,8 +1263,6 @@ with h1:
         if known_scores:
             st.session_state.ai_scores_b1 = known_scores
             st.success(f"✓ **{brand1_name}** — F={known_scores['F']}, C={known_scores['C']}")
-            with st.expander("Analysis", expanded=False):
-                st.write(known_scores.get('reasoning', ''))
         elif AI_ENABLED and (st.session_state.ai_scores_b1 is None or st.session_state.last_brand1 != brand1_name):
             st.session_state.last_brand1 = brand1_name
             with st.spinner(f"Analyzing {brand1_name}..."):
@@ -1230,6 +1283,10 @@ with h1:
             st.warning(f"⚠️ **{brand1_name}** — set scores manually below")
         
         ai1 = st.session_state.ai_scores_b1
+        # Always show Analysis expander so both columns stay aligned (fixed height so both panels match)
+        with st.expander("Analysis", expanded=False):
+            _reasoning_b1 = (known_scores.get('reasoning', '') if known_scores else (ai1.get('reasoning', '') if ai1 else ''))
+            st.markdown(_analysis_panel_html(_reasoning_b1), unsafe_allow_html=True)
         # Prefer saved overrides (final_b1) so upload restarts analysis but keeps your edits
         _fb1 = st.session_state.get('final_b1') or {}
         def _orig_b1(key: str, default):
@@ -1357,8 +1414,6 @@ with h2:
         if known_scores2:
             st.session_state.ai_scores_b2 = known_scores2
             st.success(f"✓ **{brand2_name}** — F={known_scores2['F']}, C={known_scores2['C']}")
-            with st.expander("Analysis", expanded=False):
-                st.write(known_scores2.get('reasoning', ''))
         elif AI_ENABLED and (st.session_state.ai_scores_b2 is None or st.session_state.last_brand2 != brand2_name):
             st.session_state.last_brand2 = brand2_name
             with st.spinner(f"Analyzing {brand2_name}..."):
@@ -1379,6 +1434,10 @@ with h2:
             st.warning(f"⚠️ **{brand2_name}** — set scores manually below")
         
         ai2 = st.session_state.ai_scores_b2
+        # Always show Analysis expander so both columns stay aligned (fixed height so both panels match)
+        with st.expander("Analysis", expanded=False):
+            _reasoning_b2 = (known_scores2.get('reasoning', '') if known_scores2 else (ai2.get('reasoning', '') if ai2 else ''))
+            st.markdown(_analysis_panel_html(_reasoning_b2), unsafe_allow_html=True)
         # Prefer saved overrides (final_b2) so upload restarts analysis but keeps your edits
         _fb2 = st.session_state.get('final_b2') or {}
         def _orig_b2(key: str, default):
@@ -1592,20 +1651,20 @@ with col1:
         st.markdown(f"""
         | Var | Score | Meaning |
         |-----|-------|---------|
-        | **M** | {b1_m} | Mouthfeel |
-        | **E** | {b1_e} | Emotion |
-        | **F** | {b1_f} | Familiarity |
-        | **B** | {b1_b} | Bites |
-        | **K** | {b1_k} | Kinetic |
-        | **C** | {b1_c} | Cognitive |
+        | **M** | {b1_m:.1f} | Mouthfeel |
+        | **E** | {b1_e:.1f} | Emotion |
+        | **F** | {b1_f:.1f} | Familiarity |
+        | **B** | {b1_b:.1f} | Bites |
+        | **K** | {b1_k:.1f} | Kinetic |
+        | **C** | {b1_c:.1f} | Cognitive |
         """)
-        num1 = b1_m * b1_e * b1_f
-        den1 = b1_b * b1_k * b1_c
+        num1 = round(b1_m * b1_e * b1_f, 1)
+        den1 = round(b1_b * b1_k * b1_c, 1)
         st.caption(f"Numerator: {num1} | Denominator: {den1}")
         if b1_locked:
             st.error("🔒 **LOCKED**: Provide override justification above")
         elif s1:
-            st.metric("S-Score™", f"{s1:.2f}")
+            st.metric("S-Score™", f"{round(s1, 1):.1f}")
     else:
         st.info("Enter brand name above")
 
@@ -1622,21 +1681,21 @@ with col2:
         st.markdown(f"""
         | Var | Score | Meaning |
         |-----|-------|---------|
-        | **M** | {b2_m} | Mouthfeel |
-        | **E** | {b2_e} | Emotion |
-        | **F** | {b2_f} | Familiarity |
-        | **B** | {b2_b} | Bites |
-        | **K** | {b2_k} | Kinetic |
-        | **C** | {b2_c} | Cognitive |
+        | **M** | {b2_m:.1f} | Mouthfeel |
+        | **E** | {b2_e:.1f} | Emotion |
+        | **F** | {b2_f:.1f} | Familiarity |
+        | **B** | {b2_b:.1f} | Bites |
+        | **K** | {b2_k:.1f} | Kinetic |
+        | **C** | {b2_c:.1f} | Cognitive |
         """)
-        num2 = b2_m * b2_e * b2_f
-        den2 = b2_b * b2_k * b2_c
+        num2 = round(b2_m * b2_e * b2_f, 1)
+        den2 = round(b2_b * b2_k * b2_c, 1)
         st.caption(f"Numerator: {num2} | Denominator: {den2}")
         if b2_locked:
             st.error("🔒 **LOCKED**: Provide override justification above")
         elif s2:
-            delta = s2 - s1 if s1 else None
-            st.metric("S-Score™", f"{s2:.2f}", delta=f"{delta:+.2f}" if delta else None)
+            delta = round(s2 - s1, 1) if s1 is not None else None
+            st.metric("S-Score™", f"{round(s2, 1):.1f}", delta=f"{delta:+.1f}" if delta is not None else None)
     else:
         st.info("Enter brand name above")
 
@@ -1664,21 +1723,19 @@ if s1 is not None and s2 is not None:
     n1 = brand1_name or "Brand 1"
     n2 = brand2_name or "Brand 2"
     
-    # Create comparison dataframe - ALL STRINGS to avoid pyarrow issues
+    # Create comparison dataframe - ALL STRINGS to avoid pyarrow issues; one decimal
     data = {
         "Variable": ["M · Mouthfeel", "E · Emotion", "F · Familiarity", "B · Bites", "K · Kinetic", "C · Cognitive", "S-SCORE™"],
-        n1: [str(b1_m), str(b1_e), str(b1_f), str(b1_b), str(b1_k), str(b1_c), f"{s1:.2f}"],
-        n2: [str(b2_m), str(b2_e), str(b2_f), str(b2_b), str(b2_k), str(b2_c), f"{s2:.2f}"],
+        n1: [f"{b1_m:.1f}", f"{b1_e:.1f}", f"{b1_f:.1f}", f"{b1_b:.1f}", f"{b1_k:.1f}", f"{b1_c:.1f}", f"{s1:.1f}"],
+        n2: [f"{b2_m:.1f}", f"{b2_e:.1f}", f"{b2_f:.1f}", f"{b2_b:.1f}", f"{b2_k:.1f}", f"{b2_c:.1f}", f"{s2:.1f}"],
         "Delta": [
-            f"{b2_m - b1_m:+.2f}", f"{b2_e - b1_e:+.2f}", f"{b2_f - b1_f:+.2f}",
-            f"{b2_b - b1_b:+.2f}", f"{b2_k - b1_k:+.2f}", f"{b2_c - b1_c:+.2f}",
-            f"{s2 - s1:+.2f}"
+            f"{b2_m - b1_m:+.1f}", f"{b2_e - b1_e:+.1f}", f"{b2_f - b1_f:+.1f}",
+            f"{b2_b - b1_b:+.1f}", f"{b2_k - b1_k:+.1f}", f"{b2_c - b1_c:+.1f}",
+            f"{s2 - s1:+.1f}"
         ]
     }
     
     df = pd.DataFrame(data)
-    
-    # Display as table
     st.table(df)
     
     # ═══════════════════════════════════════════════════════════════════════════════════
@@ -1686,19 +1743,32 @@ if s1 is not None and s2 is not None:
     # ═══════════════════════════════════════════════════════════════════════════════════
     st.markdown("### 📈 Visual Score Comparison")
     
-    chart_data = pd.DataFrame({
-        "Variable": ["M", "E", "F", "B", "K", "C"],
-        n1: [b1_m, b1_e, b1_f, b1_b, b1_k, b1_c],
-        n2: [b2_m, b2_e, b2_f, b2_b, b2_k, b2_c]
-    })
-    
-    # Custom chart with dark theme colors
-    st.bar_chart(
-        chart_data.set_index("Variable"), 
-        height=350, 
-        width="stretch",
-        color=["#10b981", "#ec4899"]  # Mint green and Pink for brands
+    import plotly.graph_objects as go
+    variables = ["M", "E", "F", "B", "K", "C"]
+    fig = go.Figure(data=[
+        go.Bar(name=n2, x=variables, y=[b2_m, b2_e, b2_f, b2_b, b2_k, b2_c], marker_color="#ec4899"),
+        go.Bar(name=n1, x=variables, y=[b1_m, b1_e, b1_f, b1_b, b1_k, b1_c], marker_color="#10b981"),
+    ])
+    fig.update_layout(
+        barmode="stack",
+        height=350,
+        margin=dict(l=50, r=30, t=30, b=60),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0.2)",
+        font=dict(color="#E9D5FF", size=14),
+        legend=dict(orientation="h", yanchor="top", y=1.12, xanchor="center", x=0.5, font=dict(size=14)),
+        xaxis=dict(
+            tickangle=0,
+            tickfont=dict(size=18, color="#FFFFFF"),
+            title_text="",
+        ),
+        yaxis=dict(
+            tickfont=dict(size=14, color="#E9D5FF"),
+            title_text="",
+            gridcolor="rgba(255,255,255,0.1)",
+        ),
     )
+    st.plotly_chart(fig, use_container_width=True, key="score_comparison_bar")
     
     st.caption("📈 **Numerator (M, E, F)**: Higher = more value | 📉 **Denominator (B, K, C)**: Lower = less friction")
     
@@ -1708,17 +1778,17 @@ if s1 is not None and s2 is not None:
     bc1, bc2 = st.columns(2)
     with bc1:
         st.markdown(f"**{n1}**")
-        num1 = b1_m * b1_e * b1_f
-        den1 = b1_b * b1_k * b1_c
+        num1 = round(b1_m * b1_e * b1_f, 1)
+        den1 = round(b1_b * b1_k * b1_c, 1)
         st.metric("Numerator (M×E×F)", num1)
         st.metric("Denominator (B×K×C)", den1)
     
     with bc2:
         st.markdown(f"**{n2}**")
-        num2 = b2_m * b2_e * b2_f
-        den2 = b2_b * b2_k * b2_c
-        st.metric("Numerator (M×E×F)", num2, delta=num2-num1)
-        st.metric("Denominator (B×K×C)", den2, delta=den2-den1, delta_color="inverse")
+        num2 = round(b2_m * b2_e * b2_f, 1)
+        den2 = round(b2_b * b2_k * b2_c, 1)
+        st.metric("Numerator (M×E×F)", num2, delta=round(num2 - num1, 1))
+        st.metric("Denominator (B×K×C)", den2, delta=round(den2 - den1, 1), delta_color="inverse")
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # INVESTOR MEMO

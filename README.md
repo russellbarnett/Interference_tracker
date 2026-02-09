@@ -69,6 +69,8 @@ python3 -m pytest -v
 
 All tests are headless: no browser, no Streamlit UI, no Gemini API calls (AI tests use the rule-based memo only).
 
+**Copy rules:** Equation vs persistence is locked in and enforced by `test_copy_consistency.py`. See `COPY_RULES.md`.
+
 ---
 
 ## Uploads
